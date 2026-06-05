@@ -1,5 +1,4 @@
-const GEMINI_API_KEY = 'YOUR_API_KEY';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+const GEMINI_MODEL = "gemini-3.5-flash";
 
 function getConversationHistory() {
   const props = PropertiesService.getUserProperties();
@@ -17,7 +16,6 @@ function onOpen() {
   ui.createMenu('Gemini Docs')
       .addItem('Открыть чат', 'showSidebar')
       .addSeparator()
-      .addItem('Вставить Markdown (тест)', 'insertMarkdownFromCell')
       .addToUi();
 }
 
@@ -120,7 +118,7 @@ function showSidebar() {
       const div = document.createElement('div');
       div.className = 'message ai loading';
       div.id = 'loading-message';
-      div.innerHTML = '⏳ Gemini генерирует ответ...';
+      div.innerHTML = 'Gemini генерирует ответ...';
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
@@ -157,10 +155,10 @@ function showSidebar() {
 
     function insertResponse(btn) {
       const messageDiv = btn.parentElement;
-      const messageText = messageDiv.innerText.replace('📄 Вставить в документ', '').trim();
+      const messageText = messageDiv.innerText.replace('Вставить в документ', '').trim();
       
       btn.disabled = true;
-      btn.innerText = '⏳ Вставка...';
+      btn.innerText = 'Вставка...';
       
       google.script.run
         .withSuccessHandler((res) => {
@@ -208,49 +206,17 @@ function sendChatMessage(userMessage) {
     - Списки (- или 1.) для структурирования
     Отвечай чётко, по делу, на русском языке.`;
 
-    const requestBody = {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: systemPrompt + '\n\nЗапрос пользователя: ' + userMessage }]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048
-      }
-    };
-
-    const options = {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(requestBody),
-      headers: {
-        'Authorization': 'Bearer ' + GEMINI_API_KEY
-      },
-      muteHttpExceptions: true
-    };
-
-    const response = UrlFetchApp.fetch(GEMINI_API_URL + '?key=' + GEMINI_API_KEY, options);
-    const jsonResponse = JSON.parse(response.getContentText());
-
-    if (jsonResponse.candidates && jsonResponse.candidates[0]) {
-      const aiResponse = jsonResponse.candidates[0].content.parts[0].text;
-      
-      history.push({
-        role: 'model',
-        parts: [{ text: aiResponse }]
-      });
-      saveConversationHistory(history);
-      
-      return { success: true, response: aiResponse };
-    } else {
-      return { 
-        success: false, 
-        error: 'Не удалось получить ответ от Gemini',
-        details: jsonResponse 
-      };
-    }
+    const fullPrompt = systemPrompt + '\n\nЗапрос пользователя: ' + userMessage;
+    
+    const aiResponse = callGemini(fullPrompt);
+    
+    history.push({
+      role: 'model',
+      parts: [{ text: aiResponse }]
+    });
+    saveConversationHistory(history);
+    
+    return { success: true, response: aiResponse };
   } catch (e) {
     return { 
       success: false, 
@@ -258,6 +224,34 @@ function sendChatMessage(userMessage) {
       stack: e.stack 
     };
   }
+}
+
+function callGemini(prompt) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const apiKey = scriptProperties.getProperty('GEMINI_API_KEY');
+  
+  if (!apiKey) {
+    throw new Error("API-ключ не найден! Добавьте GEMINI_API_KEY в Свойства скрипта.");
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { 
+      temperature: 0.7, 
+      maxOutputTokens: 8192 
+    }
+  };
+
+  const response = UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify(payload)
+  });
+
+  const json = JSON.parse(response.getContentText());
+  return json.candidates[0].content.parts[0].text;
 }
 
 function insertMarkdownToDocument(markdown) {
