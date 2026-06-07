@@ -1,22 +1,14 @@
 const GEMINI_MODEL = "gemini-3.5-flash";
 
-function getConversationHistory() {
-  const props = PropertiesService.getUserProperties();
-  const history = props.getProperty('chatHistory');
-  return history ? JSON.parse(history) : [];
-}
-
-function saveConversationHistory(history) {
-  const props = PropertiesService.getUserProperties();
-  props.setProperty('chatHistory', JSON.stringify(history));
-}
-
 function onOpen() {
-  const ui = DocumentApp.getUi();
-  ui.createMenu('Gemini Docs')
-      .addItem('Открыть чат', 'showSidebar')
-      .addSeparator()
-      .addToUi();
+  try {
+    const ui = DocumentApp.getUi();
+    ui.createMenu('Gemini Docs')
+        .addItem('Открыть чат-ассистент', 'showSidebar')
+        .addToUi();
+  } catch (e) {
+    Logger.log('onOpen() вызвана из неправильного контекста: ' + e.toString());
+  }
 }
 
 function showSidebar() {
@@ -26,87 +18,49 @@ function showSidebar() {
 <head>
   <base target="_top">
   <style>
-    body { font-family: Arial, sans-serif; padding: 10px; margin: 0; }
-    #chat { 
-      height: calc(100vh - 120px); 
-      overflow-y: auto; 
-      border: 1px solid #ddd; 
-      padding: 10px; 
-      border-radius: 8px; 
-      background: #f9f9f9;
-      margin-bottom: 10px;
-    }
-    .message { 
-      margin: 8px 0; 
-      padding: 10px; 
-      border-radius: 8px; 
-      max-width: 85%; 
-      word-wrap: break-word;
-    }
-    .user { 
-      background: #e3f2fd; 
-      margin-left: auto; 
-      text-align: right; 
-    }
-    .ai { 
-      background: #f1f8e9; 
-      margin-right: auto; 
-    }
-    .input-container {
-      display: flex;
-      gap: 5px;
-    }
-    input { 
-      flex: 1;
-      padding: 10px; 
-      border: 1px solid #ccc; 
-      border-radius: 6px; 
-    }
-    button { 
-      padding: 10px 15px;
-      border: none;
-      border-radius: 6px;
-      background: #4CAF50;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover { background: #45a049; }
-    .insert-btn {
-      margin-top: 8px;
-      padding: 5px 10px;
-      font-size: 11px;
-      background: #2196F3;
-    }
-    .insert-btn:hover { background: #0b7dda; }
-    .loading {
-      text-align: center;
-      color: #666;
-      font-style: italic;
-    }
+    body { font-family: 'Google Sans', Arial, sans-serif; padding: 15px; margin: 0; color: #202124; }
+    #chat { height: calc(100vh - 140px); overflow-y: auto; border: 1px solid #dadce0; padding: 12px; border-radius: 8px; background: #f8f9fa; margin-bottom: 12px; }
+    .message { margin: 8px 0; padding: 10px 14px; border-radius: 12px; max-width: 90%; word-wrap: break-word; line-height: 1.4; font-size: 14px; }
+    .user { background: #e8f0fe; margin-left: auto; text-align: right; color: #1967d2; }
+    .ai { background: #e6f4ea; margin-right: auto; color: #137333; white-space: pre-wrap; }
+    .input-container { display: flex; gap: 8px; }
+    input { flex: 1; padding: 10px; border: 1px solid #dadce0; border-radius: 20px; outline: none; font-size: 14px; }
+    input:focus { border-color: #1a73e8; }
+    button { padding: 10px 16px; border: none; border-radius: 20px; background: #1a73e8; color: white; cursor: pointer; font-weight: 500; font-size: 14px; transition: background 0.2s; }
+    button:hover { background: #1557b0; }
+    button:disabled { background: #dadce0; color: #5f6368; cursor: not-allowed; }
+    .insert-btn { margin-top: 8px; padding: 6px 12px; font-size: 12px; background: #1a73e8; border-radius: 4px; }
+    .insert-btn:hover { background: #1557b0; }
+    .loading { text-align: center; color: #5f6368; font-style: italic; padding: 10px; }
   </style>
 </head>
 <body>
   <div id="chat"></div>
-  
   <div class="input-container">
-    <input type="text" id="userInput" placeholder="Напишите промпт для документации..." onkeypress="if(event.key==='Enter') sendMessage()">
-    <button onclick="sendMessage()">Отправить</button>
+    <input type="text" id="userInput" placeholder="Что добавить в документ?" onkeypress="if(event.key==='Enter') sendMessage()">
+    <button id="sendBtn" onclick="sendMessage()">Отправить</button>
   </div>
 
   <script>
     window.onload = function() {
-      addMessage("Привет! Я помогу вам создать документацию. Опишите, что нужно написать.", false, false);
+      addMessage("Привет! Я изучу стиль всего вашего документа и помогу написать новый текст в том же формате. Просто напишите, что нужно добавить.", false, false);
     };
 
     function addMessage(text, isUser, showInsertBtn = true) {
       const chat = document.getElementById('chat');
       const div = document.createElement('div');
-      div.className = \`message \${isUser ? 'user' : 'ai'}\`;
+      div.className = 'message ' + (isUser ? 'user' : 'ai');
       
       if (isUser || !showInsertBtn) {
-        div.innerHTML = text;
+        div.innerText = text;
       } else {
-        div.innerHTML = text + \`<br><button class="insert-btn" onclick="insertResponse(this)">📄 Вставить в документ</button>\`;
+        div.innerText = text;
+        const btn = document.createElement('button');
+        btn.className = 'insert-btn';
+        btn.innerText = 'Вставить в документ с форматированием';
+        btn.onclick = function() { insertResponse(btn, text); };
+        div.appendChild(document.createElement('br'));
+        div.appendChild(btn);
       }
       
       chat.appendChild(div);
@@ -118,14 +72,16 @@ function showSidebar() {
       const div = document.createElement('div');
       div.className = 'message ai loading';
       div.id = 'loading-message';
-      div.innerHTML = 'Gemini генерирует ответ...';
+      div.innerText = 'Анализирую стиль документа и генерирую ответ...';
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
+      document.getElementById('sendBtn').disabled = true;
     }
 
     function hideLoading() {
       const loading = document.getElementById('loading-message');
       if (loading) loading.remove();
+      document.getElementById('sendBtn').disabled = false;
     }
 
     function sendMessage() {
@@ -153,26 +109,23 @@ function showSidebar() {
         .sendChatMessage(text);
     }
 
-    function insertResponse(btn) {
-      const messageDiv = btn.parentElement;
-      const messageText = messageDiv.innerText.replace('Вставить в документ', '').trim();
-      
+    function insertResponse(btn, messageText) {
       btn.disabled = true;
-      btn.innerText = 'Вставка...';
+      btn.innerText = 'Применяю форматирование и вставляю...';
       
       google.script.run
         .withSuccessHandler((res) => {
           if (res.success) {
-            btn.innerText = 'Вставлено!';
-            btn.style.background = '#4CAF50';
+            btn.innerText = 'Успешно вставлено!';
+            btn.style.background = '#137333';
           } else {
-            btn.innerText = 'Ошибка';
-            btn.style.background = '#f44336';
+            btn.innerText = 'Ошибка вставки';
+            btn.style.background = '#d93025';
           }
         })
         .withFailureHandler((err) => {
           btn.innerText = 'Ошибка';
-          btn.style.background = '#f44336';
+          btn.style.background = '#d93025';
           alert("Не удалось вставить: " + err.message);
         })
         .insertMarkdownToDocument(messageText);
@@ -184,45 +137,38 @@ function showSidebar() {
   
   const html = HtmlService.createHtmlOutput(htmlContent)
       .setTitle('Gemini Documentation Assistant')
-      .setWidth(350);
+      .setWidth(400);
   DocumentApp.getUi().showSidebar(html);
 }
 
 function sendChatMessage(userMessage) {
   try {
-    const history = getConversationHistory();
+    const docMarkdown = getDocumentAsMarkdown();
     
-    history.push({
-      role: 'user',
-      parts: [{ text: userMessage }]
-    });
+    const systemPrompt = `Ты - эксперт по технической документации. 
+Ниже представлен ТЕКУЩИЙ ДОКУМЕНТ в формате Markdown. Внимательно проанализируй его структуру и стиль форматирования (уровни заголовков, использование списков, стиль изложения).
 
-    const systemPrompt = `Ты - помощник по созданию технической документации. 
-    Отвечай в формате Markdown. Используй:
-    - # для заголовков
-    - ## для подзаголовков
-    - **жирный** для важных терминов
-    - *курсив* для акцентов
-    - Списки (- или 1.) для структурирования
-    Отвечай чётко, по делу, на русском языке.`;
+ТЕКУЩИЙ ДОКУМЕНТ:
+\`\`\`markdown
+${docMarkdown}
+\`\`\`
 
-    const fullPrompt = systemPrompt + '\n\nЗапрос пользователя: ' + userMessage;
+ЗАДАЧА:
+На основе проанализированного стиля этого документа, выполни запрос пользователя. 
+Отвечай СТРОГО в формате Markdown, имитируя стиль исходного документа. Используй:
+- #, ##, ### для заголовков соответствующих уровней
+- **жирный** для ключевых терминов
+- *курсив* для акцентов
+- - или 1. для списков
+Отвечай чётко, по делу, на русском языке. Не добавляй лишних комментариев вне markdown.`;
+
+    const fullPrompt = systemPrompt + "\n\nЗАПРОС ПОЛЬЗОВАТЕЛЯ: " + userMessage;
     
     const aiResponse = callGemini(fullPrompt);
     
-    history.push({
-      role: 'model',
-      parts: [{ text: aiResponse }]
-    });
-    saveConversationHistory(history);
-    
     return { success: true, response: aiResponse };
   } catch (e) {
-    return { 
-      success: false, 
-      error: e.toString(),
-      stack: e.stack 
-    };
+    return { success: false, error: e.toString() };
   }
 }
 
@@ -231,7 +177,7 @@ function callGemini(prompt) {
   const apiKey = scriptProperties.getProperty('GEMINI_API_KEY');
   
   if (!apiKey) {
-    throw new Error("API-ключ не найден! Добавьте GEMINI_API_KEY в Свойства скрипта.");
+    throw new Error("API-ключ не найден! Добавьте 'GEMINI_API_KEY' в Свойства скрипта (Project Settings -> Script Properties).");
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
@@ -239,7 +185,7 @@ function callGemini(prompt) {
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { 
-      temperature: 0.7, 
+      temperature: 0.4,
       maxOutputTokens: 8192 
     }
   };
@@ -247,11 +193,65 @@ function callGemini(prompt) {
   const response = UrlFetchApp.fetch(url, {
     method: "post",
     contentType: "application/json",
-    payload: JSON.stringify(payload)
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
   });
 
   const json = JSON.parse(response.getContentText());
+  
+  if (json.error) {
+    throw new Error("Ошибка Gemini API: " + json.error.message);
+  }
+  
+  if (!json.candidates || !json.candidates[0] || !json.candidates[0].content) {
+    throw new Error("Пустой или некорректный ответ от Gemini");
+  }
+  
   return json.candidates[0].content.parts[0].text;
+}
+
+function getDocumentAsMarkdown() {
+  const doc = DocumentApp.getActiveDocument();
+  const body = doc.getBody();
+  let markdown = "";
+  const numChildren = body.getNumChildren();
+  
+  for (let i = 0; i < numChildren; i++) {
+    const child = body.getChild(i);
+    const type = child.getType();
+    
+    if (type === DocumentApp.ElementType.PARAGRAPH) {
+      const p = child.asParagraph();
+      const text = p.getText().trim();
+      if (!text) { 
+        markdown += "\n"; 
+        continue; 
+      }
+      
+      const heading = p.getHeading();
+      if (heading === DocumentApp.ParagraphHeading.HEADING1) {
+        markdown += "# " + text + "\n\n";
+      } else if (heading === DocumentApp.ParagraphHeading.HEADING2) {
+        markdown += "## " + text + "\n\n";
+      } else if (heading === DocumentApp.ParagraphHeading.HEADING3) {
+        markdown += "### " + text + "\n\n";
+      } else {
+        markdown += text + "\n\n";
+      }
+    } 
+    else if (type === DocumentApp.ElementType.LIST_ITEM) {
+      const item = child.asListItem();
+      const text = item.getText().trim();
+      const glyph = item.getGlyphType();
+      if (glyph === DocumentApp.GlyphType.BULLET) {
+        markdown += "- " + text + "\n";
+      } else {
+        markdown += "1. " + text + "\n";
+      }
+    }
+  }
+  
+  return markdown || "Документ пуст.";
 }
 
 function insertMarkdownToDocument(markdown) {
@@ -260,7 +260,7 @@ function insertMarkdownToDocument(markdown) {
     const result = insertMarkdownAtCursor(doc, markdown);
     
     if (result.success) {
-      return { success: true, message: 'Текст успешно вставлен в документ!' };
+      return { success: true, message: 'Текст успешно вставлен с форматированием!' };
     } else {
       return { success: false, message: result.error };
     }
@@ -269,24 +269,9 @@ function insertMarkdownToDocument(markdown) {
   }
 }
 
-function insertMarkdownFromCell() {
-  const markdown = getMarkdownText();
-  const doc = DocumentApp.getActiveDocument();
-  insertMarkdownAtCursor(doc, markdown);
-}
-
-function getMarkdownText() {
-  return "# Заголовок\n\nОбычный текст с **жирным** и *курсивом*.\n\n## Подзаголовок\n\n- Пункт 1\n- Пункт 2\n\n1. Первый\n2. Второй";
-}
-
 function insertMarkdownAtCursor(doc, markdown) {
-  if (!doc) {
-    doc = DocumentApp.getActiveDocument();
-  }
-  
   if (!markdown || typeof markdown !== 'string') {
-    Logger.log('Ошибка: Текст Markdown не найден или пуст.');
-    return { success: false, error: 'Текст Markdown не найден или пуст' };
+    return { success: false, error: 'Текст для вставки пуст' };
   }
 
   try {
@@ -314,7 +299,6 @@ function insertMarkdownAtCursor(doc, markdown) {
         if (offset > 0 && offset < fullText.length) {
           const before = fullText.substring(0, offset);
           const after = fullText.substring(offset);
-          
           element.asText().setText(before);
           body.insertParagraph(insertIndex + 1, after);
           insertIndex++;
@@ -366,65 +350,61 @@ function insertMarkdownAtCursor(doc, markdown) {
     
     return { success: true };
   } catch (e) {
-    Logger.log('Ошибка вставки: ' + e.toString());
     return { success: false, error: e.toString() };
   }
 }
 
 function applyInlineFormatting(paragraph) {
-  const text = paragraph.getText();
+  let text = paragraph.getText();
   const textObj = paragraph.editAsText();
   
   const boldRegex = /\*\*(.+?)\*\*/g;
   let match;
-  let processedText = text;
   const boldRanges = [];
   
   while ((match = boldRegex.exec(text)) !== null) {
     boldRanges.push({ start: match.index, end: match.index + match[0].length, content: match[1] });
   }
   
+  let processedText = text;
+  let offset = 0;
+  
   for (let i = boldRanges.length - 1; i >= 0; i--) {
     const range = boldRanges[i];
     processedText = processedText.substring(0, range.start) + range.content + processedText.substring(range.end);
-  }
-  
-  paragraph.setText(processedText);
-  
-  let offset = 0;
-  for (const range of boldRanges) {
+    
     const startPos = range.start - offset;
     const endPos = startPos + range.content.length - 1;
     textObj.setBold(startPos, endPos, true);
+    
     offset += (range.end - range.start) - range.content.length;
   }
   
-  const currentText = paragraph.getText();
+  text = processedText;
   const italicRegex = /\*([^*]+?)\*/g;
   const italicRanges = [];
   
-  while ((match = italicRegex.exec(currentText)) !== null) {
+  while ((match = italicRegex.exec(text)) !== null) {
     italicRanges.push({ start: match.index, end: match.index + match[0].length, content: match[1] });
   }
   
-  let italicProcessed = currentText;
+  processedText = text;
+  offset = 0;
+  
   for (let i = italicRanges.length - 1; i >= 0; i--) {
     const range = italicRanges[i];
-    italicProcessed = italicProcessed.substring(0, range.start) + range.content + italicProcessed.substring(range.end);
-  }
-  
-  paragraph.setText(italicProcessed);
-  
-  offset = 0;
-  for (const range of italicRanges) {
+    processedText = processedText.substring(0, range.start) + range.content + processedText.substring(range.end);
+    
     const startPos = range.start - offset;
     const endPos = startPos + range.content.length - 1;
     textObj.setItalic(startPos, endPos, true);
+    
     offset += (range.end - range.start) - range.content.length;
   }
+  
+  paragraph.setText(processedText);
 }
 
-function clearConversationHistory() {
-  const props = PropertiesService.getUserProperties();
-  props.deleteProperty('chatHistory');
+function getConversationHistory() {
+  return [];
 }
