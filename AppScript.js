@@ -65,6 +65,18 @@ function showSidebar() {
       flex-direction: column;
       gap: 6px;
     }
+    .options-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .options-row label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
     .image-section { 
       display: flex; 
       gap: 6px; 
@@ -142,10 +154,21 @@ function showSidebar() {
   
   <div class="controls">
     <div class="image-section">
-      <label for="imageInput" class="file-label">Изображение</label>
+      <label for="imageInput" class="file-label">📷 Изображение</label>
       <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
       <span id="imageName"></span>
       <img id="imagePreview" class="image-preview">
+    </div>
+    
+    <div class="options-row">
+      <label>
+        <input type="radio" name="genType" value="paragraph" checked>
+        Абзац
+      </label>
+      <label>
+        <input type="radio" name="genType" value="sentence">
+        Предложение
+      </label>
     </div>
     
     <div class="input-container">
@@ -159,7 +182,7 @@ function showSidebar() {
     let selectedImageName = '';
 
     window.onload = function() {
-      addMessage("Привет! Опишите, что нужно добавить в документ. Можно прикрепить изображение.", false, false);
+      addMessage("Привет! Опишите, что нужно добавить в текущий раздел. Можно прикрепить изображение.", false, false);
     };
 
     function previewImage() {
@@ -212,7 +235,7 @@ function showSidebar() {
       const div = document.createElement('div');
       div.className = 'message ai loading';
       div.id = 'loading-message';
-      div.innerText = 'Генерация...';
+      div.innerText = 'Анализ раздела и генерация...';
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
       document.getElementById('sendBtn').disabled = true;
@@ -229,22 +252,28 @@ function showSidebar() {
       const text = input.value.trim();
       if (!text && !selectedImageBase64) return;
 
+      const genType = document.querySelector('input[name="genType"]:checked').value;
+      
       let messageText = text;
       if (selectedImageBase64) {
         messageText += (text ? '\\n\\n' : '') + '[Изображение: ' + selectedImageName + ']';
       }
+      messageText += ' [' + (genType === 'paragraph' ? 'Абзац' : 'Предложение') + ']';
 
       addMessage(messageText, true);
       input.value = '';
       
-      // Очищаем изображение СРАЗУ после добавления сообщения
-      if (selectedImageBase64) {
+      const imageToSend = selectedImageBase64;
+      const imageNameToSend = selectedImageName;
+      const hasImage = !!selectedImageBase64;
+      
+      if (hasImage) {
         clearImage();
       }
       
       showLoading();
 
-      if (selectedImageBase64) {
+      if (hasImage) {
         google.script.run
           .withSuccessHandler((res) => {
             hideLoading();
@@ -258,7 +287,7 @@ function showSidebar() {
             hideLoading();
             addMessage("Ошибка: " + err.message, false, false);
           })
-          .sendChatMessageWithImage(text, selectedImageBase64, selectedImageName);
+          .sendChatMessageWithImage(text, imageToSend, imageNameToSend, genType);
       } else {
         google.script.run
           .withSuccessHandler((res) => {
@@ -273,7 +302,7 @@ function showSidebar() {
             hideLoading();
             addMessage("Ошибка: " + err.message, false, false);
           })
-          .sendChatMessage(text);
+          .sendChatMessage(text, genType);
       }
     }
 
@@ -287,7 +316,7 @@ function showSidebar() {
 
     function insertResponse(btn, messageText) {
       btn.disabled = true;
-      btn.innerText = '⏳ Вставка...';
+      btn.innerText = 'Вставка...';
       
       google.script.run
         .withSuccessHandler((res) => {
@@ -317,22 +346,24 @@ function showSidebar() {
   DocumentApp.getUi().showSidebar(html);
 }
 
-function sendChatMessage(userMessage) {
+function sendChatMessage(userMessage, genType) {
   try {
-    const docMarkdown = getDocumentAsMarkdown();
+    const currentSection = getCurrentSectionMarkdown();
     
-    const systemPrompt = 'Ты - эксперт по технической документации. \n' +
-    'Ниже представлен ТЕКУЩИЙ ДОКУМЕНТ в формате Markdown. Проанализируй его структуру и стиль.\n\n' +
-    'ТЕКУЩИЙ ДОКУМЕНТ:\n' +
-    '```markdown\n' +
-    docMarkdown + '\n' +
-    '```\n\n' +
-    'ЗАДАЧА:\n' +
-    'На основе стиля документа выполни запрос пользователя. Отвечай СТРОГО в формате Markdown.\n' +
-    'Используй: # для заголовков, **жирный**, *курсив*, - списки.\n' +
-    'Отвечай на русском языке.';
+    const docStyles = getDocumentStyleGuide();
+    
+    const genTypeText = genType === 'paragraph' ? 'абзац (3-5 предложений)' : '1-2 предложения';
 
-    const fullPrompt = systemPrompt + "\n\nЗАПРОС ПОЛЬЗОВАТЕЛЯ: " + userMessage;
+    const systemPrompt = 'Ты - эксперт по технической документации.\n\n' +
+    'СТИЛЬ ДОКУМЕНТА (копируй это форматирование):\n' +
+    '```markdown\n' + docStyles + '\n```\n\n' +
+    'ТЕКУЩИЙ РАЗДЕЛ (контекст):\n' +
+    '```markdown\n' + currentSection + '\n```\n\n' +
+    'ЗАДАЧА:\n' +
+    'Сгенерируй ' + genTypeText + ' для текущего раздела на основе запроса пользователя. ' +
+    'Строго следуй стилю документа. Отвечай ТОЛЬКО текстом без markdown-разметки (кроме **жирного** и *курсива*).';
+
+    const fullPrompt = systemPrompt + "\n\nЗАПРОС: " + userMessage;
     
     const aiResponse = callGemini(fullPrompt);
     
@@ -342,49 +373,171 @@ function sendChatMessage(userMessage) {
   }
 }
 
-function sendChatMessageWithImage(userMessage, imageBase64, imageName) {
+function sendChatMessageWithImage(userMessage, imageBase64, imageName, genType) {
   try {
-    const docMarkdown = getDocumentAsMarkdown();
+    const currentSection = getCurrentSectionMarkdown();
+    const docStyles = getDocumentStyleGuide();
     
-    const systemPrompt = 'Ты - эксперт по технической документации.\n' +
-    'ТЕКУЩИЙ ДОКУМЕНТ:\n' +
-    '```markdown\n' +
-    docMarkdown + '\n' +
-    '```\n\n' +
+    const genTypeText = genType === 'paragraph' ? 'абзац (3-5 предложений)' : '1-2 предложения';
+
+    const systemPrompt = 'Ты - эксперт по технической документации с vision capabilities.\n\n' +
+    'СТИЛЬ ДОКУМЕНТА:\n' +
+    '```markdown\n' + docStyles + '\n```\n\n' +
+    'ТЕКУЩИЙ РАЗДЕЛ:\n' +
+    '```markdown\n' + currentSection + '\n```\n\n' +
     'ЗАДАЧА:\n' +
     'Пользователь загрузил изображение "' + imageName + '" и просит: "' + userMessage + '"\n' +
-    'Создай текст в стиле документа. Отвечай в формате Markdown на русском языке.';
+    'Проанализируй изображение и сгенерируй ' + genTypeText + ' для текущего раздела. ' +
+    'Следуй стилю документа. Отвечай ТОЛЬКО текстом.';
 
-    const fullPrompt = systemPrompt;
-    
-    const aiResponse = callGemini(fullPrompt);
-    
-    if (imageBase64) {
-      try {
-        const doc = DocumentApp.getActiveDocument();
-        const cursor = doc.getCursor();
-        if (cursor) {
-          const element = cursor.getElement();
-          let currentElement = element;
-          while (currentElement.getParent() && 
-                 currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
-            currentElement = currentElement.getParent();
-          }
-          const insertIndex = doc.getBody().getChildIndex(currentElement) + 1;
-          
-          const decoded = Utilities.base64Decode(imageBase64);
-          const blob = Utilities.newBlob(decoded, 'image/png', imageName);
-          doc.getBody().insertImage(insertIndex, blob);
-        }
-      } catch (imgError) {
-        Logger.log('Ошибка вставки изображения: ' + imgError.toString());
-      }
-    }
+    const aiResponse = callGeminiWithImage(systemPrompt, imageBase64);
     
     return { success: true, response: aiResponse };
   } catch (e) {
     return { success: false, error: e.toString() };
   }
+}
+
+function getCurrentSectionMarkdown() {
+  const doc = DocumentApp.getActiveDocument();
+  const body = doc.getBody();
+  const cursor = doc.getCursor();
+  
+  if (!cursor) {
+    return getDocumentAsMarkdown();
+  }
+  
+  const element = cursor.getElement();
+  let currentElement = element;
+  
+  while (currentElement.getParent() && 
+         currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
+    currentElement = currentElement.getParent();
+  }
+  
+  const currentIndex = body.getChildIndex(currentElement);
+
+  let sectionStart = 0;
+  let sectionHeading = '';
+  
+  for (let i = currentIndex; i >= 0; i--) {
+    const child = body.getChild(i);
+    if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      const p = child.asParagraph();
+      const heading = p.getHeading();
+      if (heading === DocumentApp.ParagraphHeading.HEADING1 || 
+          heading === DocumentApp.ParagraphHeading.HEADING2 || 
+          heading === DocumentApp.ParagraphHeading.HEADING3) {
+        sectionStart = i;
+        sectionHeading = p.getText();
+        break;
+      }
+    }
+  }
+  
+  let sectionEnd = body.getNumChildren();
+  let currentHeadingLevel = 0;
+  
+  if (sectionHeading) {
+    const startPara = body.getChild(sectionStart).asParagraph();
+    const startHeading = startPara.getHeading();
+    if (startHeading === DocumentApp.ParagraphHeading.HEADING1) currentHeadingLevel = 1;
+    else if (startHeading === DocumentApp.ParagraphHeading.HEADING2) currentHeadingLevel = 2;
+    else if (startHeading === DocumentApp.ParagraphHeading.HEADING3) currentHeadingLevel = 3;
+  }
+  
+  for (let i = currentIndex + 1; i < body.getNumChildren(); i++) {
+    const child = body.getChild(i);
+    if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      const p = child.asParagraph();
+      const heading = p.getHeading();
+      let headingLevel = 0;
+      if (heading === DocumentApp.ParagraphHeading.HEADING1) headingLevel = 1;
+      else if (heading === DocumentApp.ParagraphHeading.HEADING2) headingLevel = 2;
+      else if (heading === DocumentApp.ParagraphHeading.HEADING3) headingLevel = 3;
+      
+      if (headingLevel > 0 && headingLevel <= currentHeadingLevel) {
+        sectionEnd = i;
+        break;
+      }
+    }
+  }
+  
+  let markdown = '';
+  if (sectionHeading) {
+    markdown += '# ' + sectionHeading + '\n\n';
+  }
+  
+  for (let i = sectionStart + 1; i < sectionEnd && i < body.getNumChildren(); i++) {
+    const child = body.getChild(i);
+    const type = child.getType();
+    
+    if (type === DocumentApp.ElementType.PARAGRAPH) {
+      const p = child.asParagraph();
+      const text = p.getText().trim();
+      if (text) {
+        markdown += text + '\n\n';
+      }
+    } else if (type === DocumentApp.ElementType.LIST_ITEM) {
+      const item = child.asListItem();
+      const text = item.getText().trim();
+      markdown += '- ' + text + '\n';
+    }
+  }
+  
+  return markdown || "Раздел пуст.";
+}
+
+function getDocumentStyleGuide() {
+  const doc = DocumentApp.getActiveDocument();
+  const body = doc.getBody();
+  let styles = {
+    headings: [],
+    hasBullets: false,
+    hasNumbers: false
+  };
+  
+  const numChildren = body.getNumChildren();
+  
+  for (let i = 0; i < numChildren; i++) {
+    const child = body.getChild(i);
+    const type = child.getType();
+    
+    if (type === DocumentApp.ElementType.PARAGRAPH) {
+      const p = child.asParagraph();
+      const text = p.getText();
+      const heading = p.getHeading();
+      
+      if (heading === DocumentApp.ParagraphHeading.HEADING1) {
+        styles.headings.push({ level: 1, text: text });
+      } else if (heading === DocumentApp.ParagraphHeading.HEADING2) {
+        styles.headings.push({ level: 2, text: text });
+      } else if (heading === DocumentApp.ParagraphHeading.HEADING3) {
+        styles.headings.push({ level: 3, text: text });
+      }
+    } else if (type === DocumentApp.ElementType.LIST_ITEM) {
+      const item = child.asListItem();
+      if (item.getGlyphType() === DocumentApp.GlyphType.BULLET) {
+        styles.hasBullets = true;
+      } else {
+        styles.hasNumbers = true;
+      }
+    }
+  }
+  
+  let styleGuide = 'Структура документа:\n';
+  styles.headings.slice(0, 10).forEach(h => {
+    const prefix = '#'.repeat(h.level);
+    styleGuide += prefix + ' ' + h.text + '\n';
+  });
+  
+  styleGuide += '\nПравила форматирования:\n';
+  styleGuide += '- Используй **жирный** для ключевых терминов\n';
+  styleGuide += '- Используй *курсив* для акцентов\n';
+  if (styles.hasBullets) styleGuide += '- Используй маркированные списки (-)\n';
+  if (styles.hasNumbers) styleGuide += '- Используй нумерованные списки (1.)\n';
+  
+  return styleGuide;
 }
 
 function callGemini(prompt) {
@@ -392,7 +545,7 @@ function callGemini(prompt) {
   const apiKey = scriptProperties.getProperty('GEMINI_API_KEY');
   
   if (!apiKey) {
-    throw new Error("API-ключ не найден! Добавьте 'GEMINI_API_KEY' в Свойства скрипта.");
+    throw new Error("API-ключ не найден!");
   }
 
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
@@ -401,7 +554,7 @@ function callGemini(prompt) {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { 
       temperature: 0.4,
-      maxOutputTokens: 8192 
+      maxOutputTokens: 2048 
     }
   };
 
@@ -419,7 +572,55 @@ function callGemini(prompt) {
   }
   
   if (!json.candidates || !json.candidates[0] || !json.candidates[0].content) {
-    throw new Error("Пустой или некорректный ответ от Gemini");
+    throw new Error("Пустой ответ от Gemini");
+  }
+  
+  return json.candidates[0].content.parts[0].text;
+}
+
+function callGeminiWithImage(prompt, imageBase64) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const apiKey = scriptProperties.getProperty('GEMINI_API_KEY');
+  
+  if (!apiKey) {
+    throw new Error("API-ключ не найден!");
+  }
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
+  
+  const payload = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: 'image/png',
+            data: imageBase64
+          }
+        }
+      ]
+    }],
+    generationConfig: { 
+      temperature: 0.4,
+      maxOutputTokens: 2048 
+    }
+  };
+
+  const response = UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  const json = JSON.parse(response.getContentText());
+  
+  if (json.error) {
+    throw new Error("Ошибка Gemini API: " + json.error.message);
+  }
+  
+  if (!json.candidates || !json.candidates[0] || !json.candidates[0].content) {
+    throw new Error("Пустой ответ от Gemini");
   }
   
   return json.candidates[0].content.parts[0].text;
@@ -498,6 +699,7 @@ function insertMarkdownAtCursor(doc, markdown) {
     
     const cursor = doc.getCursor();
     let insertIndex = 0;
+    let insertAfterCurrentParagraph = false;
 
     if (cursor) {
       const element = cursor.getElement();
@@ -520,17 +722,23 @@ function insertMarkdownAtCursor(doc, markdown) {
           element.asText().setText(before);
           body.insertParagraph(insertIndex + 1, after);
           insertIndex++;
+          insertAfterCurrentParagraph = true;
         } else if (offset === fullText.length) {
-          insertIndex++;
+          insertAfterCurrentParagraph = true;
         }
       } else {
-        insertIndex++;
+        insertAfterCurrentParagraph = true;
       }
+    }
+
+    if (insertAfterCurrentParagraph) {
+      insertIndex++;
     }
 
     let currentIndex = insertIndex;
 
-    for (let line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const trimmed = line.trim();
       
       if (trimmed === '') {
@@ -539,16 +747,16 @@ function insertMarkdownAtCursor(doc, markdown) {
       }
 
       if (trimmed.startsWith('# ')) {
-        body.insertParagraph(currentIndex++, trimmed.substring(2))
-            .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        const p = body.insertParagraph(currentIndex++, trimmed.substring(2));
+        p.setHeading(DocumentApp.ParagraphHeading.HEADING1);
       } 
       else if (trimmed.startsWith('## ')) {
-        body.insertParagraph(currentIndex++, trimmed.substring(3))
-            .setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        const p = body.insertParagraph(currentIndex++, trimmed.substring(3));
+        p.setHeading(DocumentApp.ParagraphHeading.HEADING2);
       } 
       else if (trimmed.startsWith('### ')) {
-        body.insertParagraph(currentIndex++, trimmed.substring(4))
-            .setHeading(DocumentApp.ParagraphHeading.HEADING3);
+        const p = body.insertParagraph(currentIndex++, trimmed.substring(4));
+        p.setHeading(DocumentApp.ParagraphHeading.HEADING3);
       } 
       else if (trimmed.match(/^\s*[-*+]\s/)) {
         const p = body.insertListItem(currentIndex++, trimmed.replace(/^\s*[-*+]\s/, ''));
@@ -568,6 +776,7 @@ function insertMarkdownAtCursor(doc, markdown) {
     
     return { success: true };
   } catch (e) {
+    Logger.log('Ошибка вставки: ' + e.toString());
     return { success: false, error: e.toString() };
   }
 }
