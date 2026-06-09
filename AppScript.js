@@ -154,7 +154,7 @@ function showSidebar() {
   
   <div class="controls">
     <div class="image-section">
-      <label for="imageInput" class="file-label">📷 Изображение</label>
+      <label for="imageInput" class="file-label">Изображение</label>
       <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
       <span id="imageName"></span>
       <img id="imagePreview" class="image-preview">
