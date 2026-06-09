@@ -220,7 +220,7 @@ function showSidebar() {
         div.innerText = text;
         const btn = document.createElement('button');
         btn.className = 'insert-btn';
-        btn.innerText = '📄 Вставить в документ';
+        btn.innerText = 'Вставить в документ';
         btn.onclick = function() { insertResponse(btn, text); };
         div.appendChild(document.createElement('br'));
         div.appendChild(btn);
@@ -235,7 +235,7 @@ function showSidebar() {
       const div = document.createElement('div');
       div.className = 'message ai loading';
       div.id = 'loading-message';
-      div.innerText = '⏳ Анализ раздела и генерация...';
+      div.innerText = 'Анализ раздела и генерация...';
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
       document.getElementById('sendBtn').disabled = true;
@@ -316,20 +316,20 @@ function showSidebar() {
 
     function insertResponse(btn, messageText) {
       btn.disabled = true;
-      btn.innerText = '⏳ Вставка...';
+      btn.innerText = 'Вставка...';
       
       google.script.run
         .withSuccessHandler((res) => {
           if (res.success) {
-            btn.innerText = '✅ Вставлено!';
+            btn.innerText = 'Вставлено!';
             btn.style.background = '#137333';
           } else {
-            btn.innerText = '❌ Ошибка';
+            btn.innerText = 'Ошибка';
             btn.style.background = '#d93025';
           }
         })
         .withFailureHandler((err) => {
-          btn.innerText = '❌ Ошибка';
+          btn.innerText = 'Ошибка';
           btn.style.background = '#d93025';
           alert("Не удалось вставить: " + err.message);
         })
@@ -348,10 +348,8 @@ function showSidebar() {
 
 function sendChatMessage(userMessage, genType) {
   try {
-    // Получаем ТОЛЬКО текущий раздел где находится курсор
     const currentSection = getCurrentSectionMarkdown();
-    
-    // Получаем стили всего документа
+
     const docStyles = getDocumentStyleGuide();
     
     const genTypeText = genType === 'paragraph' ? 'абзац (3-5 предложений)' : '1-2 предложения';
@@ -392,7 +390,6 @@ function sendChatMessageWithImage(userMessage, imageBase64, imageName, genType) 
     'Проанализируй изображение и сгенерируй ' + genTypeText + ' для текущего раздела. ' +
     'Следуй стилю документа. Отвечай ТОЛЬКО текстом.';
 
-    // Отправляем текст + изображение в Gemini
     const aiResponse = callGeminiWithImage(systemPrompt, imageBase64);
     
     return { success: true, response: aiResponse };
@@ -401,7 +398,6 @@ function sendChatMessageWithImage(userMessage, imageBase64, imageName, genType) 
   }
 }
 
-// Получает текущий раздел где находится курсор
 function getCurrentSectionMarkdown() {
   const doc = DocumentApp.getActiveDocument();
   const body = doc.getBody();
@@ -414,7 +410,6 @@ function getCurrentSectionMarkdown() {
   const element = cursor.getElement();
   let currentElement = element;
   
-  // Находим индекс текущего элемента
   while (currentElement.getParent() && 
          currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
     currentElement = currentElement.getParent();
@@ -422,7 +417,6 @@ function getCurrentSectionMarkdown() {
   
   const currentIndex = body.getChildIndex(currentElement);
   
-  // Ищем ближайший заголовок выше
   let sectionStart = 0;
   let sectionHeading = '';
   
@@ -441,7 +435,6 @@ function getCurrentSectionMarkdown() {
     }
   }
   
-  // Ищем конец раздела (следующий заголовок того же или более высокого уровня)
   let sectionEnd = body.getNumChildren();
   let currentHeadingLevel = 0;
   
@@ -470,7 +463,6 @@ function getCurrentSectionMarkdown() {
     }
   }
   
-  // Собираем markdown для раздела
   let markdown = '';
   if (sectionHeading) {
     markdown += '# ' + sectionHeading + '\n\n';
@@ -496,7 +488,6 @@ function getCurrentSectionMarkdown() {
   return markdown || "Раздел пуст.";
 }
 
-// Получает стили всего документа (заголовки, списки и т.д.)
 function getDocumentStyleGuide() {
   const doc = DocumentApp.getActiveDocument();
   const body = doc.getBody();
@@ -534,7 +525,6 @@ function getDocumentStyleGuide() {
     }
   }
   
-  // Формируем описание стиля
   let styleGuide = 'Структура документа:\n';
   styles.headings.slice(0, 10).forEach(h => {
     const prefix = '#'.repeat(h.level);
