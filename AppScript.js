@@ -10,8 +10,8 @@ function onOpen() {
         .addItem('Создать титульный лист', 'createTitlePage')
         .addItem('Создать содержание', 'createTableOfContents');
     
-    ui.createMenu('✨ Gemini Docs')
-        .addItem('💬 Открыть чат-ассистент', 'showSidebar')
+    ui.createMenu('Gemini Docs')
+        .addItem('Открыть чат-ассистент', 'showSidebar')
         .addSeparator()
         .addSubMenu(gostMenu)
         .addToUi();
