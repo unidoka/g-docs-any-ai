@@ -1,16 +1,17 @@
-const GEMINI_MODEL = "gemini-3.5-flash";
+const GEMINI_MODEL = "gemini-2.0-flash";
+const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
 
 function onOpen() {
   try {
     const ui = DocumentApp.getUi();
     
-    const gostMenu = ui.createMenu('ГОСТ')
-        .addItem('Применить настройки', 'applyGOSTSettings')
-        .addItem('Создать титульный лист', 'createTitlePage')
-        .addItem('Создать содержание', 'createTableOfContents');
+    const gostMenu = ui.createMenu('📋 ГОСТ')
+        .addItem('📐 Применить настройки', 'applyGOSTSettings')
+        .addItem('📄 Создать титульный лист', 'createTitlePage')
+        .addItem('📑 Создать содержание', 'createTableOfContents');
     
-    ui.createMenu('Gemini Docs')
-        .addItem('Открыть чат-ассистент', 'showSidebar')
+    ui.createMenu('✨ Gemini Docs')
+        .addItem('💬 Открыть чат-ассистент', 'showSidebar')
         .addSeparator()
         .addSubMenu(gostMenu)
         .addToUi();
@@ -18,6 +19,69 @@ function onOpen() {
     Logger.log('onOpen() вызвана из неправильного контекста: ' + e.toString());
   }
 }
+
+// ===== НАСТРОЙКИ =====
+
+function saveSettings(apiKey, modelName, baseUrl) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (apiKey && apiKey.trim()) props.setProperty('GEMINI_API_KEY', apiKey.trim());
+    if (modelName && modelName.trim()) props.setProperty('AI_MODEL_NAME', modelName.trim());
+    if (baseUrl && baseUrl.trim()) props.setProperty('AI_BASE_URL', baseUrl.trim());
+    return { success: true, message: 'Настройки сохранены!' };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function getSettings() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    return {
+      success: true,
+      apiKey: props.getProperty('GEMINI_API_KEY') || '',
+      modelName: props.getProperty('AI_MODEL_NAME') || GEMINI_MODEL,
+      baseUrl: props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL
+    };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function testConnection() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiKey = props.getProperty('GEMINI_API_KEY');
+    const modelName = props.getProperty('AI_MODEL_NAME') || GEMINI_MODEL;
+    const baseUrl = props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL;
+    
+    if (!apiKey) return { success: false, error: 'API-ключ не задан. Сохраните настройки.' };
+    
+    const url = baseUrl + modelName + ':generateContent?key=' + apiKey;
+    const payload = {
+      contents: [{ parts: [{ text: 'Say "OK" if you can read this.' }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 10 }
+    };
+
+    const response = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    const json = JSON.parse(response.getContentText());
+    if (json.error) return { success: false, error: json.error.message };
+    if (json.candidates && json.candidates[0]) {
+      return { success: true, message: '✅ Подключение успешно! Модель: ' + modelName };
+    }
+    return { success: false, error: 'Неожиданный ответ от API' };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ===== ГОСТ ФУНКЦИИ =====
 
 function applyGOSTSettings() {
   try {
@@ -87,112 +151,59 @@ function applyGOSTSettings() {
     footerPara.setFontSize(14);
     footerPara.appendPageNumber(DocumentApp.PageNumber.CURRENT);
     
-    DocumentApp.getUi().alert('Настройки ГОСТ применены:\n\n' +
-      '• Поля: левое 30мм, правое 10мм, верх/низ 20мм\n' +
-      '• Шрифт: Times New Roman 14pt\n' +
-      '• Межстрочный интервал: 1.5\n' +
-      '• Абзацный отступ: 1.25 см\n' +
-      '• Нумерация страниц: внизу по центру');
-      
+    DocumentApp.getUi().alert('✅ Настройки ГОСТ применены!');
   } catch (e) {
-    DocumentApp.getUi().alert('Ошибка применения ГОСТ: ' + e.toString());
+    DocumentApp.getUi().alert('❌ Ошибка применения ГОСТ: ' + e.toString());
   }
 }
 
 function createTitlePage() {
   try {
     const ui = DocumentApp.getUi();
-    
     const response = ui.prompt(
       'Создание титульного листа',
       'Введите данные в формате:\n\n' +
-      'Организация\n' +
-      'Название работы\n' +
-      'Тип работы (Курсовая работа / Дипломная работа / Отчёт по практике)\n' +
-      'Автор\n' +
-      'Руководитель\n' +
-      'Город\n' +
-      'Год\n\n' +
-      'Пример:\n' +
-      'МГУ им. М.В. Ломоносова\n' +
-      'Разработка информационной системы\n' +
-      'Курсовая работа\n' +
-      'Иванов И.И.\n' +
-      'Петров П.П.\n' +
-      'Москва\n' +
-      '2026',
+      'Организация\nНазвание работы\nТип работы\nАвтор\nРуководитель\nГород\nГод',
       ui.ButtonSet.OK_CANCEL
     );
+    if (response.getSelectedButton() !== ui.Button.OK) return;
     
-    if (response.getSelectedButton() !== ui.Button.OK) {
-      return;
-    }
-    
-    const inputText = response.getResponseText();
-    const lines = inputText.split('\n').map(line => line.trim()).filter(line => line);
-    
-    if (lines.length < 7) {
-      ui.alert('Недостаточно данных. Нужно минимум 7 строк.');
-      return;
-    }
-    
-    const organization = lines[0];
-    const title = lines[1];
-    const workType = lines[2];
-    const author = lines[3];
-    const supervisor = lines[4];
-    const city = lines[5];
-    const year = lines[6];
+    const lines = response.getResponseText().split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 7) { ui.alert('❌ Нужно минимум 7 строк.'); return; }
     
     const doc = DocumentApp.getActiveDocument();
     const body = doc.getBody();
-    
     applyGOSTSettings();
     
-    const orgPara = body.insertParagraph(0, organization.toUpperCase());
-    orgPara.setFontFamily('Times New Roman');
-    orgPara.setFontSize(14);
-    orgPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    orgPara.setSpacingAfter(6);
+    const orgPara = body.insertParagraph(0, lines[0].toUpperCase());
+    orgPara.setFontFamily('Times New Roman'); orgPara.setFontSize(14);
+    orgPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER); orgPara.setSpacingAfter(6);
     
-    const titlePara = body.insertParagraph(1, title.toUpperCase());
-    titlePara.setFontFamily('Times New Roman');
-    titlePara.setFontSize(16);
-    titlePara.setBold(true);
+    const titlePara = body.insertParagraph(1, lines[1].toUpperCase());
+    titlePara.setFontFamily('Times New Roman'); titlePara.setFontSize(16); titlePara.setBold(true);
     titlePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    titlePara.setSpacingBefore(60);
-    titlePara.setSpacingAfter(12);
+    titlePara.setSpacingBefore(60); titlePara.setSpacingAfter(12);
     
-    const typePara = body.insertParagraph(2, workType);
-    typePara.setFontFamily('Times New Roman');
-    typePara.setFontSize(14);
-    typePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    typePara.setSpacingAfter(40);
+    const typePara = body.insertParagraph(2, lines[2]);
+    typePara.setFontFamily('Times New Roman'); typePara.setFontSize(14);
+    typePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER); typePara.setSpacingAfter(40);
     
-    const authorPara = body.insertParagraph(3, 'Выполнил: ' + author);
-    authorPara.setFontFamily('Times New Roman');
-    authorPara.setFontSize(14);
-    authorPara.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-    authorPara.setSpacingAfter(6);
+    const authorPara = body.insertParagraph(3, 'Выполнил: ' + lines[3]);
+    authorPara.setFontFamily('Times New Roman'); authorPara.setFontSize(14);
+    authorPara.setAlignment(DocumentApp.HorizontalAlignment.RIGHT); authorPara.setSpacingAfter(6);
     
-    const supervisorPara = body.insertParagraph(4, 'Руководитель: ' + supervisor);
-    supervisorPara.setFontFamily('Times New Roman');
-    supervisorPara.setFontSize(14);
-    supervisorPara.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-    supervisorPara.setSpacingAfter(80);
+    const supervisorPara = body.insertParagraph(4, 'Руководитель: ' + lines[4]);
+    supervisorPara.setFontFamily('Times New Roman'); supervisorPara.setFontSize(14);
+    supervisorPara.setAlignment(DocumentApp.HorizontalAlignment.RIGHT); supervisorPara.setSpacingAfter(80);
     
-    const cityYearPara = body.insertParagraph(5, city + ', ' + year);
-    cityYearPara.setFontFamily('Times New Roman');
-    cityYearPara.setFontSize(14);
-    cityYearPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    cityYearPara.setSpacingBefore(100);
+    const cityYearPara = body.insertParagraph(5, lines[5] + ', ' + lines[6]);
+    cityYearPara.setFontFamily('Times New Roman'); cityYearPara.setFontSize(14);
+    cityYearPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER); cityYearPara.setSpacingBefore(100);
     
     body.insertPageBreak(6);
-    
-    ui.alert('Титульный лист создан!');
-    
+    ui.alert('✅ Титульный лист создан!');
   } catch (e) {
-    DocumentApp.getUi().alert('Ошибка создания титульного листа: ' + e.toString());
+    DocumentApp.getUi().alert('❌ Ошибка: ' + e.toString());
   }
 }
 
@@ -202,83 +213,58 @@ function createTableOfContents() {
     const body = doc.getBody();
     
     let insertIndex = 0;
-    const children = body.getNumChildren();
-    
-    for (let i = 0; i < children; i++) {
-      const child = body.getChild(i);
-      if (child.getType() === DocumentApp.ElementType.PAGE_BREAK) {
-        insertIndex = i + 1;
-        break;
+    for (let i = 0; i < body.getNumChildren(); i++) {
+      if (body.getChild(i).getType() === DocumentApp.ElementType.PAGE_BREAK) {
+        insertIndex = i + 1; break;
       }
     }
     
     const tocTitle = body.insertParagraph(insertIndex, 'СОДЕРЖАНИЕ');
-    tocTitle.setFontFamily('Times New Roman');
-    tocTitle.setFontSize(14);
-    tocTitle.setBold(true);
-    tocTitle.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    tocTitle.setSpacingAfter(12);
+    tocTitle.setFontFamily('Times New Roman'); tocTitle.setFontSize(14); tocTitle.setBold(true);
+    tocTitle.setAlignment(DocumentApp.HorizontalAlignment.CENTER); tocTitle.setSpacingAfter(12);
     
     const headings = [];
-    const paragraphs = body.getParagraphs();
-    
-    for (let i = 0; i < paragraphs.length; i++) {
-      const para = paragraphs[i];
-      const heading = para.getHeading();
-      
-      if (heading === DocumentApp.ParagraphHeading.HEADING1 ||
-          heading === DocumentApp.ParagraphHeading.HEADING2 ||
-          heading === DocumentApp.ParagraphHeading.HEADING3) {
-        
-        const text = para.getText().trim();
-        const level = heading === DocumentApp.ParagraphHeading.HEADING1 ? 1 :
-                      heading === DocumentApp.ParagraphHeading.HEADING2 ? 2 : 3;
-        
-        headings.push({ text, level });
+    for (const para of body.getParagraphs()) {
+      const h = para.getHeading();
+      if (h === DocumentApp.ParagraphHeading.HEADING1 || 
+          h === DocumentApp.ParagraphHeading.HEADING2 || 
+          h === DocumentApp.ParagraphHeading.HEADING3) {
+        headings.push({
+          text: para.getText().trim(),
+          level: h === DocumentApp.ParagraphHeading.HEADING1 ? 1 :
+                 h === DocumentApp.ParagraphHeading.HEADING2 ? 2 : 3
+        });
       }
     }
     
     let currentIndex = insertIndex + 1;
-    let sectionNumber = 1;
-    let subSectionNumber = 1;
+    let sectionNumber = 1, subSectionNumber = 1;
     
     for (const heading of headings) {
-      let prefix = '';
-      let indent = 0;
-      
+      let prefix = '', indent = 0;
       if (heading.level === 1) {
-        prefix = sectionNumber + ' ';
-        indent = 0;
-        subSectionNumber = 1;
+        prefix = sectionNumber + ' '; indent = 0; subSectionNumber = 1; sectionNumber++;
       } else if (heading.level === 2) {
         prefix = sectionNumber + '.' + subSectionNumber + ' ';
-        indent = 1.25 * 28.3465;
-        subSectionNumber++;
+        indent = 1.25 * 28.3465; subSectionNumber++;
       } else if (heading.level === 3) {
         prefix = sectionNumber + '.' + subSectionNumber + '.1 ';
         indent = 2.5 * 28.3465;
       }
       
-      if (heading.level === 1) {
-        sectionNumber++;
-      }
-      
       const tocItem = body.insertParagraph(currentIndex++, prefix + heading.text);
-      tocItem.setFontFamily('Times New Roman');
-      tocItem.setFontSize(14);
-      tocItem.setLineSpacing(1.5);
-      tocItem.setIndentStart(indent);
-      tocItem.setSpacingAfter(4);
+      tocItem.setFontFamily('Times New Roman'); tocItem.setFontSize(14);
+      tocItem.setLineSpacing(1.5); tocItem.setIndentStart(indent); tocItem.setSpacingAfter(4);
     }
     
     body.insertPageBreak(currentIndex);
-    
-    DocumentApp.getUi().alert('Содержание создано!\n\nНайдено разделов: ' + headings.length);
-    
+    DocumentApp.getUi().alert('✅ Содержание создано!\n\nНайдено разделов: ' + headings.length);
   } catch (e) {
-    DocumentApp.getUi().alert('Ошибка создания содержания: ' + e.toString());
+    DocumentApp.getUi().alert('❌ Ошибка: ' + e.toString());
   }
 }
+
+// ===== САЙДБАР =====
 
 function showSidebar() {
   try {
@@ -307,6 +293,7 @@ function showSidebar() {
       --success-color: #81c995;
       --error-color: #f28b82;
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -322,33 +309,182 @@ function showSidebar() {
       font-size: 12px;
     }
 
-    .top-options {
+    /* ===== ВЕРХНЯЯ ПАНЕЛЬ ===== */
+    .top-bar {
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: space-between;
       padding: 6px 8px;
       background-color: var(--bg-color);
       border-bottom: 1px solid var(--border-color);
       flex-shrink: 0;
+      position: relative;
     }
 
+    .top-bar-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .top-bar-title svg {
+      width: 14px;
+      height: 14px;
+      fill: var(--accent-color);
+    }
+
+    /* Кнопка-триггер выпадающего меню */
+    .params-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      background-color: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-color);
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow);
+      user-select: none;
+      font-family: inherit;
+    }
+
+    .params-btn:hover {
+      background-color: var(--elevated-color);
+      border-color: var(--accent-color);
+    }
+
+    .params-btn.active {
+      background-color: var(--accent-bg);
+      border-color: var(--accent-color);
+      color: var(--accent-color);
+    }
+
+    .params-btn svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+      transition: transform 0.25s ease;
+    }
+
+    .params-btn.active .chevron {
+      transform: rotate(180deg);
+    }
+
+    .params-btn .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--text-secondary);
+      transition: background-color 0.2s;
+    }
+
+    .params-btn .status-dot.configured {
+      background-color: var(--success-color);
+      box-shadow: 0 0 4px var(--success-color);
+    }
+
+    /* ===== ВЫПАДАЮЩАЯ ПАНЕЛЬ-СПИСОК ===== */
+    .dropdown-panel {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 8px;
+      width: calc(100% - 16px);
+      max-width: 340px;
+      background-color: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: var(--shadow-lg);
+      z-index: 100;
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98);
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      overflow: hidden;
+    }
+
+    .dropdown-panel.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .dropdown-header {
+      padding: 10px 12px 8px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .dropdown-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-color);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dropdown-title svg {
+      width: 14px;
+      height: 14px;
+      fill: var(--accent-color);
+    }
+
+    .dropdown-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Элемент списка настроек */
+    .setting-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .setting-label {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .setting-label svg {
+      width: 12px;
+      height: 12px;
+      fill: currentColor;
+    }
+
+    /* Сегментированный контроль */
     .segmented-control {
       display: flex;
-      background-color: var(--surface-color);
-      border-radius: 14px;
+      background-color: var(--bg-color);
+      border-radius: 10px;
       padding: 2px;
       gap: 2px;
-      box-shadow: var(--shadow);
-      flex: 1;
     }
 
     .segment {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 3px;
-      padding: 4px 8px;
-      border-radius: 12px;
+      gap: 4px;
+      padding: 6px 8px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 11px;
       font-weight: 500;
@@ -378,60 +514,402 @@ function showSidebar() {
       flex-shrink: 0;
     }
 
-    .image-toggle {
+    /* Переключатель изображений */
+    .toggle-row {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 3px;
-      padding: 4px 8px;
-      background-color: var(--surface-color);
-      border-radius: 12px;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background-color: var(--bg-color);
+      border-radius: 10px;
       cursor: pointer;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      transition: all 0.2s ease;
-      box-shadow: var(--shadow);
+      transition: background-color 0.2s;
       user-select: none;
-      white-space: nowrap;
-      position: relative;
     }
 
-    .image-toggle:hover {
-      background-color: rgba(138, 180, 248, 0.08);
+    .toggle-row:hover {
+      background-color: var(--elevated-color);
+    }
+
+    .toggle-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
       color: var(--text-color);
     }
 
-    .image-toggle.active {
-      background-color: var(--accent-color);
-      color: #202124;
-      box-shadow: 0 2px 6px rgba(138, 180, 248, 0.3);
+    .toggle-info svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--text-secondary);
     }
 
-    .image-toggle input { display: none; }
-
-    .image-toggle svg {
-      width: 12px;
-      height: 12px;
-      fill: currentColor;
+    .toggle-switch {
+      position: relative;
+      width: 32px;
+      height: 18px;
+      background-color: var(--elevated-color);
+      border-radius: 10px;
+      transition: background-color 0.2s;
+      flex-shrink: 0;
     }
 
-    .image-toggle::after {
+    .toggle-switch::after {
       content: '';
       position: absolute;
-      top: 3px;
-      right: 3px;
-      width: 5px;
-      height: 5px;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      background-color: var(--text-secondary);
       border-radius: 50%;
-      background-color: transparent;
-      transition: background-color 0.2s;
+      transition: all 0.2s ease;
     }
 
-    .image-toggle.active::after {
+    .toggle-row.active .toggle-switch {
+      background-color: var(--accent-color);
+    }
+
+    .toggle-row.active .toggle-switch::after {
+      left: 16px;
+      background-color: #202124;
+    }
+
+    .toggle-row.active .toggle-info svg {
+      fill: var(--accent-color);
+    }
+
+    .toggle-row input { display: none; }
+
+    /* Разделитель */
+    .dropdown-divider {
+      height: 1px;
+      background-color: var(--border-color);
+      margin: 2px 0;
+    }
+
+    /* Кнопка настроек API */
+    .api-settings-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background-color: var(--bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--text-color);
+      font-family: inherit;
+      font-size: 12px;
+      width: 100%;
+      text-align: left;
+    }
+
+    .api-settings-btn:hover {
+      background-color: var(--elevated-color);
+      border-color: var(--accent-color);
+    }
+
+    .api-settings-icon {
+      width: 28px;
+      height: 28px;
+      background-color: var(--accent-bg);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .api-settings-icon svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--accent-color);
+    }
+
+    .api-settings-text {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .api-settings-text strong {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-color);
+    }
+
+    .api-settings-text span {
+      font-size: 10px;
+      color: var(--text-secondary);
+    }
+
+    .api-status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--text-secondary);
+    }
+
+    .api-status.configured {
+      color: var(--success-color);
+    }
+
+    .api-status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--text-secondary);
+    }
+
+    .api-status.configured .api-status-dot {
       background-color: var(--success-color);
+      box-shadow: 0 0 4px var(--success-color);
     }
 
+    .chevron-right {
+      width: 14px;
+      height: 14px;
+      fill: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    /* ===== МОДАЛЬНОЕ ОКНО ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(0, 0, 0, 0.6);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal-overlay.visible { display: flex; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .modal {
+      background-color: var(--surface-color);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: var(--shadow-lg);
+      animation: slideUp 0.25s ease;
+      overflow: hidden;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-color);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .modal-title svg { width: 18px; height: 18px; fill: var(--accent-color); }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+      color: var(--text-color);
+    }
+
+    .modal-close svg { width: 16px; height: 16px; fill: currentColor; }
+
+    .modal-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .form-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .form-label svg { width: 12px; height: 12px; fill: currentColor; }
+
+    .form-input {
+      width: 100%;
+      padding: 8px 10px;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-color);
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus { border-color: var(--accent-color); }
+    .form-input::placeholder { color: var(--text-secondary); opacity: 0.6; }
+
+    .form-hint {
+      font-size: 10px;
+      color: var(--text-secondary);
+      line-height: 1.3;
+      margin-top: 2px;
+    }
+
+    .password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .password-wrapper .form-input { padding-right: 32px; }
+
+    .password-toggle {
+      position: absolute;
+      right: 4px;
+      background: transparent;
+      border: none;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .password-toggle:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+      color: var(--text-color);
+    }
+
+    .password-toggle svg { width: 14px; height: 14px; fill: currentColor; }
+
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .btn-secondary {
+      padding: 6px 14px;
+      background-color: transparent;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-secondary:hover {
+      background-color: rgba(255, 255, 255, 0.06);
+      color: var(--text-color);
+    }
+
+    .btn-primary {
+      padding: 6px 14px;
+      background-color: var(--accent-color);
+      border: none;
+      border-radius: 8px;
+      color: #202124;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-primary:hover { background-color: var(--accent-hover); }
+    .btn-primary:disabled { background-color: var(--elevated-color); color: var(--text-secondary); cursor: not-allowed; }
+
+    .btn-test {
+      padding: 6px 14px;
+      background-color: rgba(129, 201, 149, 0.15);
+      border: 1px solid rgba(129, 201, 149, 0.3);
+      border-radius: 8px;
+      color: var(--success-color);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      margin-right: auto;
+    }
+
+    .btn-test:hover { background-color: rgba(129, 201, 149, 0.25); }
+    .btn-test:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .status-message {
+      display: none;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+
+    .status-message.visible { display: block; }
+
+    .status-message.success {
+      background-color: rgba(129, 201, 149, 0.1);
+      border: 1px solid rgba(129, 201, 149, 0.2);
+      color: var(--success-color);
+    }
+
+    .status-message.error {
+      background-color: rgba(242, 139, 130, 0.1);
+      border: 1px solid rgba(242, 139, 130, 0.2);
+      color: var(--error-color);
+    }
+
+    /* ===== ЧАТ ===== */
     .chat-container {
       flex: 1;
       padding: 8px;
@@ -496,9 +974,7 @@ function showSidebar() {
       transition: background-color 0.2s;
     }
 
-    .insert-btn:hover {
-      background-color: var(--accent-hover);
-    }
+    .insert-btn:hover { background-color: var(--accent-hover); }
 
     .loading {
       text-align: center;
@@ -525,9 +1001,7 @@ function showSidebar() {
       transition: border-color 0.2s;
     }
 
-    .chat-box:focus-within {
-      border-color: var(--accent-color);
-    }
+    .chat-box:focus-within { border-color: var(--accent-color); }
 
     .mode-indicator {
       display: none;
@@ -541,16 +1015,8 @@ function showSidebar() {
       color: var(--accent-color);
     }
 
-    .mode-indicator.visible {
-      display: flex;
-    }
-
-    .mode-indicator svg {
-      width: 12px;
-      height: 12px;
-      fill: currentColor;
-      flex-shrink: 0;
-    }
+    .mode-indicator.visible { display: flex; }
+    .mode-indicator svg { width: 12px; height: 12px; fill: currentColor; flex-shrink: 0; }
 
     .selected-text-indicator {
       display: none;
@@ -564,16 +1030,8 @@ function showSidebar() {
       color: var(--success-color);
     }
 
-    .selected-text-indicator.visible {
-      display: flex;
-    }
-
-    .selected-text-indicator svg {
-      width: 12px;
-      height: 12px;
-      fill: currentColor;
-      flex-shrink: 0;
-    }
+    .selected-text-indicator.visible { display: flex; }
+    .selected-text-indicator svg { width: 12px; height: 12px; fill: currentColor; flex-shrink: 0; }
 
     .selected-text-content {
       flex: 1;
@@ -592,21 +1050,15 @@ function showSidebar() {
       border-radius: 8px;
     }
 
-    .attachment-preview.visible {
-      display: flex;
-    }
+    .attachment-preview.visible { display: flex; }
 
     .attachment-preview img {
-      width: 32px;
-      height: 32px;
+      width: 32px; height: 32px;
       border-radius: 4px;
       object-fit: cover;
     }
 
-    .attachment-info {
-      flex: 1;
-      min-width: 0;
-    }
+    .attachment-info { flex: 1; min-width: 0; }
 
     .attachment-name {
       font-size: 11px;
@@ -621,8 +1073,7 @@ function showSidebar() {
       border: none;
       color: var(--text-secondary);
       cursor: pointer;
-      width: 20px;
-      height: 20px;
+      width: 20px; height: 20px;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -635,11 +1086,7 @@ function showSidebar() {
       color: var(--error-color);
     }
 
-    .attachment-remove svg {
-      width: 14px;
-      height: 14px;
-      fill: currentColor;
-    }
+    .attachment-remove svg { width: 14px; height: 14px; fill: currentColor; }
 
     .text-input {
       width: 100%;
@@ -652,9 +1099,7 @@ function showSidebar() {
       padding: 2px 0;
     }
 
-    .text-input::placeholder {
-      color: var(--text-secondary);
-    }
+    .text-input::placeholder { color: var(--text-secondary); }
 
     .actions-row {
       display: flex;
@@ -671,8 +1116,7 @@ function showSidebar() {
     .icon-btn {
       background: transparent;
       border: none;
-      width: 28px;
-      height: 28px;
+      width: 28px; height: 28px;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -687,18 +1131,13 @@ function showSidebar() {
       color: var(--icon-hover);
     }
 
-    .icon-btn svg {
-      width: 18px;
-      height: 18px;
-      fill: currentColor;
-    }
+    .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
 
     .btn-send {
       background-color: var(--accent-color);
       color: #202124;
       border: none;
-      width: 28px;
-      height: 28px;
+      width: 28px; height: 28px;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -707,25 +1146,10 @@ function showSidebar() {
       transition: background-color 0.2s, transform 0.1s;
     }
 
-    .btn-send:hover {
-      background-color: var(--accent-hover);
-    }
-
-    .btn-send:active {
-      transform: scale(0.95);
-    }
-
-    .btn-send:disabled {
-      background-color: var(--elevated-color);
-      color: var(--text-secondary);
-      cursor: not-allowed;
-    }
-
-    .btn-send svg {
-      width: 16px;
-      height: 16px;
-      fill: currentColor;
-    }
+    .btn-send:hover { background-color: var(--accent-hover); }
+    .btn-send:active { transform: scale(0.95); }
+    .btn-send:disabled { background-color: var(--elevated-color); color: var(--text-secondary); cursor: not-allowed; }
+    .btn-send svg { width: 16px; height: 16px; fill: currentColor; }
 
     input[type="file"] { display: none; }
 
@@ -737,35 +1161,154 @@ function showSidebar() {
 </head>
 <body>
 
-  <div class="top-options">
-    <div class="segmented-control">
-      <label class="segment active">
-        <input type="radio" name="genType" value="full" checked>
-        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-        <span>Full</span>
-      </label>
-      <label class="segment">
-        <input type="radio" name="genType" value="paragraph">
-        <svg viewBox="0 0 24 24"><path d="M14 17H4v2h10v-2zm6-8H4v2h16V9zM4 15h16v-2H4v2zM4 5v2h16V5H4z"/></svg>
-        <span>Paragraph</span>
-      </label>
-      <label class="segment">
-        <input type="radio" name="genType" value="sentence">
-        <svg viewBox="0 0 24 24"><path d="M4 9h16v2H4V9zm0 4h10v2H4v-2z"/></svg>
-        <span>Sentence</span>
-      </label>
+  <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+  <div class="top-bar">
+    <div class="top-bar-title">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+      <span>Gemini Docs</span>
     </div>
     
-    <label class="image-toggle" id="imageToggle" title="Включить генерацию изображений">
-      <input type="checkbox" id="withImages">
-      <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-      <span>Images</span>
-    </label>
+    <button class="params-btn" id="paramsBtn" onclick="toggleDropdown(event)">
+      <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+      <span>Параметры</span>
+      <span class="status-dot" id="configDot" title="API не настроен"></span>
+      <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+    </button>
+    
+    <!-- ВЫПАДАЮЩАЯ ПАНЕЛЬ -->
+    <div class="dropdown-panel" id="dropdownPanel">
+      <div class="dropdown-header">
+        <div class="dropdown-title">
+          <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+          Параметры генерации
+        </div>
+      </div>
+      
+      <div class="dropdown-body">
+        <!-- Режим генерации -->
+        <div class="setting-item">
+          <div class="setting-label">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            Объём текста
+          </div>
+          <div class="segmented-control">
+            <label class="segment active">
+              <input type="radio" name="genType" value="full" checked>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              <span>Полный</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="genType" value="paragraph">
+              <svg viewBox="0 0 24 24"><path d="M14 17H4v2h10v-2zm6-8H4v2h16V9zM4 15h16v-2H4v2zM4 5v2h16V5H4z"/></svg>
+              <span>Абзац</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="genType" value="sentence">
+              <svg viewBox="0 0 24 24"><path d="M4 9h16v2H4V9zm0 4h10v2H4v-2z"/></svg>
+              <span>Фраза</span>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Переключатель изображений -->
+        <div class="setting-item">
+          <div class="setting-label">
+            <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+            Изображения
+          </div>
+          <label class="toggle-row" id="imageToggle">
+            <input type="checkbox" id="withImages">
+            <div class="toggle-info">
+              <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+              <span>Генерировать с картинками</span>
+            </div>
+            <div class="toggle-switch"></div>
+          </label>
+        </div>
+        
+        <div class="dropdown-divider"></div>
+        
+        <!-- Кнопка настроек API -->
+        <div class="setting-item">
+          <button class="api-settings-btn" onclick="openSettings()">
+            <div class="api-settings-icon">
+              <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+            </div>
+            <div class="api-settings-text">
+              <strong>Настройки API</strong>
+              <span>Ключ, модель и эндпоинт</span>
+            </div>
+            <div class="api-status" id="apiStatusIndicator">
+              <div class="api-status-dot"></div>
+              <span>Не настроено</span>
+            </div>
+            <svg class="chevron-right" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно настроек API -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+          Настройки AI
+        </div>
+        <button class="modal-close" onclick="closeSettings()">
+          <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">
+            <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+            API-ключ
+          </label>
+          <div class="password-wrapper">
+            <input type="password" id="settingsApiKey" class="form-input" placeholder="Введите API-ключ...">
+            <button class="password-toggle" onclick="togglePasswordVisibility()" title="Показать/скрыть">
+              <svg id="eyeIcon" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </button>
+          </div>
+          <div class="form-hint">Ключ для доступа к API (Gemini, OpenRouter и др.)</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">
+            <svg viewBox="0 0 24 24"><path d="M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1-2.73 2.71-2.73 7.08 0 9.79s7.15 2.71 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29-3.51 3.48-9.21 3.48-12.72 0-3.5-3.47-3.5-9.12 0-12.6 3.51-3.47 9.14-3.49 12.65 0L21 3v7.12z"/></svg>
+            Модель AI
+          </label>
+          <input type="text" id="settingsModelName" class="form-input" placeholder="gemini-2.0-flash">
+          <div class="form-hint">Название модели (gemini-2.0-flash, gpt-4o, claude-3-opus и т.д.)</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">
+            <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+            Базовый URL API
+          </label>
+          <input type="text" id="settingsBaseUrl" class="form-input" placeholder="https://generativelanguage.googleapis.com/v1beta/models/">
+          <div class="form-hint">Для Gemini: https://generativelanguage.googleapis.com/v1beta/models/<br>Для OpenRouter: https://openrouter.ai/api/v1/chat/completions</div>
+        </div>
+        
+        <div class="status-message" id="settingsStatus"></div>
+      </div>
+      
+      <div class="modal-footer">
+        <button class="btn-test" id="testBtn" onclick="testApiConnection()">🔌 Тест</button>
+        <button class="btn-secondary" onclick="closeSettings()">Отмена</button>
+        <button class="btn-primary" id="saveBtn" onclick="saveSettingsForm()">💾 Сохранить</button>
+      </div>
+    </div>
   </div>
 
   <div class="chat-container" id="chat">
     <div class="welcome-card">
-      Hi! I'll help you create documentation. Describe what you'd like to add.
+      Привет! Я помогу создать документацию. Опиши, что нужно добавить.
     </div>
   </div>
 
@@ -773,7 +1316,7 @@ function showSidebar() {
     <div class="chat-box">
       <div class="mode-indicator" id="modeIndicator">
         <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-        <span>AI will include images</span>
+        <span>AI будет включать изображения</span>
       </div>
       
       <div class="selected-text-indicator" id="selectedTextIndicator">
@@ -786,22 +1329,22 @@ function showSidebar() {
         <div class="attachment-info">
           <div class="attachment-name" id="attachmentName"></div>
         </div>
-        <button class="attachment-remove" onclick="clearImage()" title="Remove">
+        <button class="attachment-remove" onclick="clearImage()" title="Удалить">
           <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
       </div>
 
-      <input type="text" id="userInput" class="text-input" placeholder="Ask Gemini..." onkeypress="if(event.key==='Enter') sendMessage()">
+      <input type="text" id="userInput" class="text-input" placeholder="Спросите Gemini..." onkeypress="if(event.key==='Enter') sendMessage()">
       
       <div class="actions-row">
         <div class="left-actions">
-          <button class="icon-btn" title="Attach image" onclick="uploadImage()">
+          <button class="icon-btn" title="Прикрепить изображение" onclick="uploadImage()">
             <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           </button>
           <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
         </div>
         
-        <button class="btn-send" id="sendBtn" title="Send" onclick="sendMessage()">
+        <button class="btn-send" id="sendBtn" title="Отправить" onclick="sendMessage()">
           <svg viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
         </button>
       </div>
@@ -812,19 +1355,92 @@ function showSidebar() {
     let selectedImageBase64 = null;
     let selectedImageName = '';
 
+    // ===== ВЫПАДАЮЩЕЕ МЕНЮ =====
+    
+    const paramsBtn = document.getElementById('paramsBtn');
+    const dropdownPanel = document.getElementById('dropdownPanel');
+
+    function toggleDropdown(e) {
+      e.stopPropagation();
+      const isOpen = dropdownPanel.classList.contains('visible');
+      if (isOpen) {
+        closeDropdown();
+      } else {
+        dropdownPanel.classList.add('visible');
+        paramsBtn.classList.add('active');
+      }
+    }
+
+    function closeDropdown() {
+      dropdownPanel.classList.remove('visible');
+      paramsBtn.classList.remove('active');
+    }
+
+    // Закрытие при клике вне меню
+    document.addEventListener('click', function(e) {
+      if (!dropdownPanel.contains(e.target) && !paramsBtn.contains(e.target)) {
+        closeDropdown();
+      }
+    });
+
+    // Закрытие по Escape
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('settingsModal');
+        if (modal.classList.contains('visible')) {
+          closeSettings();
+        } else {
+          closeDropdown();
+        }
+      }
+    });
+
+    // Обновление индикатора статуса API
+    function updateApiStatusIndicator(isConfigured) {
+      const indicator = document.getElementById('apiStatusIndicator');
+      const dot = document.getElementById('configDot');
+      
+      if (isConfigured) {
+        indicator.classList.add('configured');
+        indicator.querySelector('span').innerText = 'Настроено';
+        dot.classList.add('configured');
+        dot.title = 'API настроен';
+      } else {
+        indicator.classList.remove('configured');
+        indicator.querySelector('span').innerText = 'Не настроено';
+        dot.classList.remove('configured');
+        dot.title = 'API не настроен';
+      }
+    }
+
+    // Проверка статуса API при загрузке
+    google.script.run
+      .withSuccessHandler((settings) => {
+        if (settings.success && settings.apiKey) {
+          updateApiStatusIndicator(true);
+        }
+      })
+      .getSettings();
+
+    // ===== СЕГМЕНТИРОВАННЫЙ КОНТРОЛЬ =====
+    
     document.querySelectorAll('.segment').forEach(segment => {
-      segment.addEventListener('click', function() {
+      segment.addEventListener('click', function(e) {
+        e.stopPropagation();
         document.querySelectorAll('.segment').forEach(s => s.classList.remove('active'));
         this.classList.add('active');
         this.querySelector('input').checked = true;
       });
     });
 
+    // ===== ПЕРЕКЛЮЧАТЕЛЬ ИЗОБРАЖЕНИЙ =====
+    
     const imageToggle = document.getElementById('imageToggle');
     const withImagesCheckbox = document.getElementById('withImages');
     const modeIndicator = document.getElementById('modeIndicator');
 
-    imageToggle.addEventListener('click', function() {
+    imageToggle.addEventListener('click', function(e) {
+      e.stopPropagation();
       setTimeout(() => {
         if (withImagesCheckbox.checked) {
           imageToggle.classList.add('active');
@@ -855,6 +1471,115 @@ function showSidebar() {
         .getSelectedText();
     }
 
+    // ===== НАСТРОЙКИ API =====
+    
+    function openSettings() {
+      closeDropdown();
+      const modal = document.getElementById('settingsModal');
+      modal.classList.add('visible');
+      
+      google.script.run
+        .withSuccessHandler((settings) => {
+          if (settings.success) {
+            document.getElementById('settingsApiKey').value = settings.apiKey || '';
+            document.getElementById('settingsModelName').value = settings.modelName || '';
+            document.getElementById('settingsBaseUrl').value = settings.baseUrl || '';
+          }
+        })
+        .getSettings();
+      
+      const status = document.getElementById('settingsStatus');
+      status.classList.remove('visible', 'success', 'error');
+    }
+
+    function closeSettings() {
+      document.getElementById('settingsModal').classList.remove('visible');
+    }
+
+    function togglePasswordVisibility() {
+      const input = document.getElementById('settingsApiKey');
+      const icon = document.getElementById('eyeIcon');
+      
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.innerHTML = '<path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>';
+      } else {
+        input.type = 'password';
+        icon.innerHTML = '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>';
+      }
+    }
+
+    function saveSettingsForm() {
+      const apiKey = document.getElementById('settingsApiKey').value.trim();
+      const modelName = document.getElementById('settingsModelName').value.trim();
+      const baseUrl = document.getElementById('settingsBaseUrl').value.trim();
+      
+      const saveBtn = document.getElementById('saveBtn');
+      saveBtn.disabled = true;
+      saveBtn.innerText = '⏳';
+      
+      google.script.run
+        .withSuccessHandler((result) => {
+          saveBtn.disabled = false;
+          saveBtn.innerText = '💾 Сохранить';
+          
+          const status = document.getElementById('settingsStatus');
+          if (result.success) {
+            status.className = 'status-message visible success';
+            status.innerText = '✅ Настройки успешно сохранены!';
+            updateApiStatusIndicator(!!apiKey);
+            setTimeout(() => closeSettings(), 1200);
+          } else {
+            status.className = 'status-message visible error';
+            status.innerText = '❌ Ошибка: ' + result.error;
+          }
+        })
+        .withFailureHandler((err) => {
+          saveBtn.disabled = false;
+          saveBtn.innerText = '💾 Сохранить';
+          const status = document.getElementById('settingsStatus');
+          status.className = 'status-message visible error';
+          status.innerText = '❌ Ошибка: ' + err.message;
+        })
+        .saveSettings(apiKey, modelName, baseUrl);
+    }
+
+    function testApiConnection() {
+      const testBtn = document.getElementById('testBtn');
+      testBtn.disabled = true;
+      testBtn.innerText = '⏳ Проверка...';
+      
+      const status = document.getElementById('settingsStatus');
+      
+      google.script.run
+        .withSuccessHandler((result) => {
+          testBtn.disabled = false;
+          testBtn.innerText = '🔌 Тест';
+          
+          if (result.success) {
+            status.className = 'status-message visible success';
+            status.innerText = result.message;
+            updateApiStatusIndicator(true);
+          } else {
+            status.className = 'status-message visible error';
+            status.innerText = '❌ ' + result.error;
+          }
+        })
+        .withFailureHandler((err) => {
+          testBtn.disabled = false;
+          testBtn.innerText = '🔌 Тест';
+          status.className = 'status-message visible error';
+          status.innerText = '❌ Ошибка: ' + err.message;
+        })
+        .testConnection();
+    }
+
+    document.getElementById('settingsModal').addEventListener('click', function(e) {
+      if (e.target === this) closeSettings();
+    });
+
+    // ===== ИЗОБРАЖЕНИЯ =====
+    
     function uploadImage() {
       document.getElementById('imageInput').click();
     }
@@ -862,17 +1587,12 @@ function showSidebar() {
     function previewImage() {
       const fileInput = document.getElementById('imageInput');
       const file = fileInput.files[0];
-      
-      if (!file) {
-        clearImage();
-        return;
-      }
+      if (!file) { clearImage(); return; }
 
       const reader = new FileReader();
       reader.onload = function(e) {
         selectedImageBase64 = e.target.result.split(',')[1];
         selectedImageName = file.name;
-        
         document.getElementById('attachmentThumb').src = e.target.result;
         document.getElementById('attachmentName').innerText = file.name;
         document.getElementById('attachmentPreview').classList.add('visible');
@@ -889,6 +1609,8 @@ function showSidebar() {
       document.getElementById('attachmentName').innerText = '';
     }
 
+    // ===== ЧАТ =====
+    
     function addMessage(text, isUser, showInsertBtn) {
       const chat = document.getElementById('chat');
       const div = document.createElement('div');
@@ -900,7 +1622,7 @@ function showSidebar() {
         div.innerText = text;
         const btn = document.createElement('button');
         btn.className = 'insert-btn';
-        btn.innerText = 'Insert';
+        btn.innerText = '📄 Вставить';
         btn.onclick = function() { insertResponse(btn, text); };
         div.appendChild(document.createElement('br'));
         div.appendChild(btn);
@@ -915,7 +1637,7 @@ function showSidebar() {
       const div = document.createElement('div');
       div.className = 'message ai loading';
       div.id = 'loading-message';
-      div.innerText = 'Generating...';
+      div.innerText = '⏳ Генерация...';
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
       document.getElementById('sendBtn').disabled = true;
@@ -940,13 +1662,9 @@ function showSidebar() {
         messageText += (text ? '\\n\\n' : '') + '[Image: ' + selectedImageName + ']';
       }
       
-      const genTypeLabels = {
-        'full': 'Full',
-        'paragraph': 'Paragraph',
-        'sentence': 'Sentence'
-      };
+      const genTypeLabels = { 'full': 'Полный', 'paragraph': 'Абзац', 'sentence': 'Фраза' };
       messageText += ' [' + genTypeLabels[genType] + ']';
-      if (withImages) messageText += ' [Images]';
+      if (withImages) messageText += ' [Картинки]';
 
       addMessage(messageText, true);
       input.value = '';
@@ -961,35 +1679,25 @@ function showSidebar() {
       
       showLoading();
 
+      const handlerSuccess = (res) => {
+        hideLoading();
+        if (res.success) addMessage(res.response, false);
+        else addMessage("Ошибка: " + res.error, false, false);
+      };
+      const handlerFailure = (err) => {
+        hideLoading();
+        addMessage("Ошибка: " + err.message, false, false);
+      };
+
       if (hasImage) {
         google.script.run
-          .withSuccessHandler((res) => {
-            hideLoading();
-            if (res.success) {
-              addMessage(res.response, false);
-            } else {
-              addMessage("Error: " + res.error, false, false);
-            }
-          })
-          .withFailureHandler((err) => {
-            hideLoading();
-            addMessage("Error: " + err.message, false, false);
-          })
+          .withSuccessHandler(handlerSuccess)
+          .withFailureHandler(handlerFailure)
           .sendChatMessageWithImage(text, imageToSend, imageNameToSend, genType, withImages);
       } else {
         google.script.run
-          .withSuccessHandler((res) => {
-            hideLoading();
-            if (res.success) {
-              addMessage(res.response, false);
-            } else {
-              addMessage("Error: " + res.error, false, false);
-            }
-          })
-          .withFailureHandler((err) => {
-            hideLoading();
-            addMessage("Error: " + err.message, false, false);
-          })
+          .withSuccessHandler(handlerSuccess)
+          .withFailureHandler(handlerFailure)
           .sendChatMessage(text, genType, withImages);
       }
     }
@@ -1011,7 +1719,7 @@ function showSidebar() {
         .withFailureHandler((err) => {
           btn.innerText = '❌';
           btn.style.background = 'var(--error-color)';
-          alert("Failed: " + err.message);
+          alert("Ошибка: " + err.message);
         })
         .insertMarkdownToDocument(messageText);
     }
@@ -1033,22 +1741,17 @@ function getSelectedText() {
   try {
     const doc = DocumentApp.getActiveDocument();
     const selection = doc.getSelection();
-    
-    if (!selection) {
-      return '';
-    }
+    if (!selection) return '';
     
     const elements = selection.getSelectedElements();
     let selectedText = '';
     
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i].getElement();
-      
       if (element.getType() === DocumentApp.ElementType.TEXT) {
         const textElement = element.asText();
         const startOffset = elements[i].getStartOffset();
         const endOffset = elements[i].getEndOffsetInclusive();
-        
         if (startOffset >= 0 && endOffset >= 0) {
           selectedText += textElement.getText().substring(startOffset, endOffset + 1);
         } else {
@@ -1057,12 +1760,8 @@ function getSelectedText() {
       } else if (element.getType() === DocumentApp.ElementType.PARAGRAPH) {
         selectedText += element.asParagraph().getText();
       }
-      
-      if (i < elements.length - 1) {
-        selectedText += '\n';
-      }
+      if (i < elements.length - 1) selectedText += '\n';
     }
-    
     return selectedText.trim();
   } catch (e) {
     Logger.log('Error getting selected text: ' + e.toString());
@@ -1076,9 +1775,7 @@ function sendChatMessage(userMessage, genType, withImages) {
     const docStyles = getDocumentStyleGuide();
     const selectedText = getSelectedText();
     
-    let genTypeText = '';
-    let maxTokens = 8192;
-    
+    let genTypeText = '', maxTokens = 8192;
     if (genType === 'full') {
       genTypeText = 'full text for the current section (multiple paragraphs, subheadings, lists if needed)';
       maxTokens = 8192;
@@ -1093,37 +1790,25 @@ function sendChatMessage(userMessage, genType, withImages) {
     let imageInstruction = '';
     if (withImages) {
       imageInstruction = '\n\nIMPORTANT: Include 1-2 relevant images in format ![description](url). ' +
-      'Use direct links from Wikimedia Commons, Unsplash or other open sources. ' +
-      'Example: ![Architecture Diagram](https://upload.wikimedia.org/wikipedia/commons/thumb/.../image.png)';
+      'Use direct links from Wikimedia Commons, Unsplash or other open sources.';
     }
 
     let selectedTextInstruction = '';
     if (selectedText && selectedText.trim()) {
       selectedTextInstruction = '\n\nSELECTED TEXT (user highlighted this in the document):\n' +
       '```markdown\n' + selectedText + '\n```\n\n' +
-      'IMPORTANT: The user has selected text in the document. Consider this text in your response. ' +
-      'Analyze the user request and act accordingly:\n' +
-      '- If the user asks to rewrite/improve: rewrite the selected text\n' +
-      '- If the user asks to continue: continue the thought from the selected text\n' +
-      '- If the user asks to expand: generate additional content based on the selected text\n' +
-      '- If the request is unrelated to the selected text: still consider it as context';
+      'Consider this text in your response.';
     }
 
     const systemPrompt = 'You are an expert technical documentation writer.\n\n' +
-    'DOCUMENT STYLE (copy this formatting):\n' +
-    '```markdown\n' + docStyles + '\n```\n\n' +
-    'CURRENT SECTION (context):\n' +
-    '```markdown\n' + currentSection + '\n```\n\n' +
-    'TASK:\n' +
-    'Generate ' + genTypeText + ' for the current section based on the user request. ' +
-    'Strictly follow the document style. Respond ONLY with text without markdown formatting (except **bold**, *italic*' + (withImages ? ' and ![images](url)' : '') + ').' +
-    selectedTextInstruction +
-    imageInstruction;
+    'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
+    'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
+    'TASK: Generate ' + genTypeText + ' for the current section based on the user request. ' +
+    'Strictly follow the document style. Respond ONLY with text.' +
+    selectedTextInstruction + imageInstruction;
 
     const fullPrompt = systemPrompt + "\n\nREQUEST: " + userMessage;
-    
     const aiResponse = callGemini(fullPrompt, maxTokens);
-    
     return { success: true, response: aiResponse };
   } catch (e) {
     return { success: false, error: e.toString() };
@@ -1136,52 +1821,29 @@ function sendChatMessageWithImage(userMessage, imageBase64, imageName, genType, 
     const docStyles = getDocumentStyleGuide();
     const selectedText = getSelectedText();
     
-    let genTypeText = '';
-    let maxTokens = 8192;
-    
-    if (genType === 'full') {
-      genTypeText = 'full text for the current section (multiple paragraphs, subheadings, lists if needed)';
-      maxTokens = 8192;
-    } else if (genType === 'paragraph') {
-      genTypeText = 'one paragraph (3-5 sentences)';
-      maxTokens = 1024;
-    } else if (genType === 'sentence') {
-      genTypeText = '1 sentences';
-      maxTokens = 256;
-    }
+    let genTypeText = '', maxTokens = 8192;
+    if (genType === 'full') { genTypeText = 'full text'; maxTokens = 8192; }
+    else if (genType === 'paragraph') { genTypeText = 'one paragraph'; maxTokens = 1024; }
+    else if (genType === 'sentence') { genTypeText = '1-2 sentences'; maxTokens = 256; }
     
     let imageInstruction = '';
     if (withImages) {
-      imageInstruction = '\n\nIMPORTANT: Include 1-2 relevant images in format ![description](url). ' +
-      'Use direct links from Wikimedia Commons, Unsplash or other open sources.';
+      imageInstruction = '\n\nIMPORTANT: Include 1-2 relevant images in format ![description](url).';
     }
 
     let selectedTextInstruction = '';
     if (selectedText && selectedText.trim()) {
-      selectedTextInstruction = '\n\nSELECTED TEXT (user highlighted this in the document):\n' +
-      '```markdown\n' + selectedText + '\n```\n\n' +
-      'IMPORTANT: The user has selected text in the document. Consider this text in your response along with the uploaded image. ' +
-      'Analyze the user request and act accordingly:\n' +
-      '- If the user asks to rewrite/improve: rewrite the selected text\n' +
-      '- If the user asks to continue: continue the thought from the selected text\n' +
-      '- If the user asks to expand: generate additional content based on the selected text and image\n' +
-      '- If the request is unrelated to the selected text: still consider it as context';
+      selectedTextInstruction = '\n\nSELECTED TEXT:\n```markdown\n' + selectedText + '\n```';
     }
 
     const systemPrompt = 'You are an expert technical documentation writer with vision capabilities.\n\n' +
-    'DOCUMENT STYLE:\n' +
-    '```markdown\n' + docStyles + '\n```\n\n' +
-    'CURRENT SECTION:\n' +
-    '```markdown\n' + currentSection + '\n```\n\n' +
-    'TASK:\n' +
-    'User uploaded image "' + imageName + '" and requests: "' + userMessage + '"\n' +
-    'Analyze the image and generate ' + genTypeText + ' for the current section. ' +
-    'Follow the document style. Respond ONLY with text.' +
-    selectedTextInstruction +
-    imageInstruction;
+    'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
+    'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
+    'TASK: User uploaded image "' + imageName + '" and requests: "' + userMessage + '"\n' +
+    'Generate ' + genTypeText + ' for the current section.' +
+    selectedTextInstruction + imageInstruction;
 
     const aiResponse = callGeminiWithImage(systemPrompt, imageBase64, maxTokens);
-    
     return { success: true, response: aiResponse };
   } catch (e) {
     return { success: false, error: e.toString() };
@@ -1193,23 +1855,17 @@ function getCurrentSectionMarkdown() {
   const body = doc.getBody();
   const cursor = doc.getCursor();
   
-  if (!cursor) {
-    return getDocumentAsMarkdown();
-  }
+  if (!cursor) return getDocumentAsMarkdown();
   
   const element = cursor.getElement();
   let currentElement = element;
-  
   while (currentElement.getParent() && 
          currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
     currentElement = currentElement.getParent();
   }
-  
   const currentIndex = body.getChildIndex(currentElement);
   
-  let sectionStart = 0;
-  let sectionHeading = '';
-  
+  let sectionStart = 0, sectionHeading = '';
   for (let i = currentIndex; i >= 0; i--) {
     const child = body.getChild(i);
     if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
@@ -1227,7 +1883,6 @@ function getCurrentSectionMarkdown() {
   
   let sectionEnd = body.getNumChildren();
   let currentHeadingLevel = 0;
-  
   if (sectionHeading) {
     const startPara = body.getChild(sectionStart).asParagraph();
     const startHeading = startPara.getHeading();
@@ -1245,174 +1900,115 @@ function getCurrentSectionMarkdown() {
       if (heading === DocumentApp.ParagraphHeading.HEADING1) headingLevel = 1;
       else if (heading === DocumentApp.ParagraphHeading.HEADING2) headingLevel = 2;
       else if (heading === DocumentApp.ParagraphHeading.HEADING3) headingLevel = 3;
-      
       if (headingLevel > 0 && headingLevel <= currentHeadingLevel) {
-        sectionEnd = i;
-        break;
+        sectionEnd = i; break;
       }
     }
   }
   
   let markdown = '';
-  if (sectionHeading) {
-    markdown += '# ' + sectionHeading + '\n\n';
-  }
+  if (sectionHeading) markdown += '# ' + sectionHeading + '\n\n';
   
   for (let i = sectionStart + 1; i < sectionEnd && i < body.getNumChildren(); i++) {
     const child = body.getChild(i);
     const type = child.getType();
-    
     if (type === DocumentApp.ElementType.PARAGRAPH) {
-      const p = child.asParagraph();
-      const text = p.getText().trim();
-      if (text) {
-        markdown += text + '\n\n';
-      }
+      const text = child.asParagraph().getText().trim();
+      if (text) markdown += text + '\n\n';
     } else if (type === DocumentApp.ElementType.LIST_ITEM) {
-      const item = child.asListItem();
-      const text = item.getText().trim();
-      markdown += '- ' + text + '\n';
+      markdown += '- ' + child.asListItem().getText().trim() + '\n';
     }
   }
-  
   return markdown || "Section is empty.";
 }
 
 function getDocumentStyleGuide() {
   const doc = DocumentApp.getActiveDocument();
   const body = doc.getBody();
-  let styles = {
-    headings: [],
-    hasBullets: false,
-    hasNumbers: false
-  };
+  let styles = { headings: [], hasBullets: false, hasNumbers: false };
   
-  const numChildren = body.getNumChildren();
-  
-  for (let i = 0; i < numChildren; i++) {
+  for (let i = 0; i < body.getNumChildren(); i++) {
     const child = body.getChild(i);
     const type = child.getType();
-    
     if (type === DocumentApp.ElementType.PARAGRAPH) {
       const p = child.asParagraph();
-      const text = p.getText();
       const heading = p.getHeading();
-      
-      if (heading === DocumentApp.ParagraphHeading.HEADING1) {
-        styles.headings.push({ level: 1, text: text });
-      } else if (heading === DocumentApp.ParagraphHeading.HEADING2) {
-        styles.headings.push({ level: 2, text: text });
-      } else if (heading === DocumentApp.ParagraphHeading.HEADING3) {
-        styles.headings.push({ level: 3, text: text });
-      }
+      if (heading === DocumentApp.ParagraphHeading.HEADING1) styles.headings.push({ level: 1, text: p.getText() });
+      else if (heading === DocumentApp.ParagraphHeading.HEADING2) styles.headings.push({ level: 2, text: p.getText() });
+      else if (heading === DocumentApp.ParagraphHeading.HEADING3) styles.headings.push({ level: 3, text: p.getText() });
     } else if (type === DocumentApp.ElementType.LIST_ITEM) {
-      const item = child.asListItem();
-      if (item.getGlyphType() === DocumentApp.GlyphType.BULLET) {
-        styles.hasBullets = true;
-      } else {
-        styles.hasNumbers = true;
-      }
+      if (child.asListItem().getGlyphType() === DocumentApp.GlyphType.BULLET) styles.hasBullets = true;
+      else styles.hasNumbers = true;
     }
   }
   
   let styleGuide = 'Document Structure:\n';
   styles.headings.slice(0, 10).forEach(h => {
-    const prefix = '#'.repeat(h.level);
-    styleGuide += prefix + ' ' + h.text + '\n';
+    styleGuide += '#'.repeat(h.level) + ' ' + h.text + '\n';
   });
-  
   styleGuide += '\nFormatting Rules:\n';
-  styleGuide += '- Use **bold** for key terms\n';
-  styleGuide += '- Use *italic* for emphasis\n';
+  styleGuide += '- Use **bold** for key terms\n- Use *italic* for emphasis\n';
   if (styles.hasBullets) styleGuide += '- Use bulleted lists (-)\n';
   if (styles.hasNumbers) styleGuide += '- Use numbered lists (1.)\n';
-  
   return styleGuide;
 }
 
 function callGemini(prompt, maxTokens = 8192) {
-  const scriptProperties = PropertiesService.getScriptProperties();
-  const apiKey = scriptProperties.getProperty('GEMINI_API_KEY');
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('GEMINI_API_KEY');
+  const modelName = props.getProperty('AI_MODEL_NAME') || GEMINI_MODEL;
+  const baseUrl = props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL;
   
-  if (!apiKey) {
-    throw new Error("API key not found! Add 'GEMINI_API_KEY' to Script Properties.");
-  }
+  if (!apiKey) throw new Error("API key not found! Click ⚙️ Параметры → Настройки API to configure.");
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
-  
+  const url = baseUrl + modelName + ':generateContent?key=' + apiKey;
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { 
-      temperature: 0.4,
-      maxOutputTokens: maxTokens
-    }
+    generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens }
   };
 
   const response = UrlFetchApp.fetch(url, {
-    method: "post",
-    contentType: "application/json",
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
+    method: "post", contentType: "application/json",
+    payload: JSON.stringify(payload), muteHttpExceptions: true
   });
 
   const json = JSON.parse(response.getContentText());
-  
-  if (json.error) {
-    throw new Error("Gemini API Error: " + json.error.message);
-  }
-  
+  if (json.error) throw new Error("Gemini API Error: " + json.error.message);
   if (!json.candidates || !json.candidates[0] || !json.candidates[0].content) {
     throw new Error("Empty response from Gemini");
   }
-  
   return json.candidates[0].content.parts[0].text;
 }
 
 function callGeminiWithImage(prompt, imageBase64, maxTokens = 8192) {
-  const scriptProperties = PropertiesService.getScriptProperties();
-  const apiKey = scriptProperties.getProperty('GEMINI_API_KEY');
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('GEMINI_API_KEY');
+  const modelName = props.getProperty('AI_MODEL_NAME') || GEMINI_MODEL;
+  const baseUrl = props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL;
   
-  if (!apiKey) {
-    throw new Error("API key not found!");
-  }
+  if (!apiKey) throw new Error("API key not found! Click ⚙️ Параметры → Настройки API to configure.");
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
-  
+  const url = baseUrl + modelName + ':generateContent?key=' + apiKey;
   const payload = {
     contents: [{
       parts: [
         { text: prompt },
-        {
-          inlineData: {
-            mimeType: 'image/png',
-            data: imageBase64
-          }
-        }
+        { inlineData: { mimeType: 'image/png', data: imageBase64 } }
       ]
     }],
-    generationConfig: { 
-      temperature: 0.4,
-      maxOutputTokens: maxTokens
-    }
+    generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens }
   };
 
   const response = UrlFetchApp.fetch(url, {
-    method: "post",
-    contentType: "application/json",
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
+    method: "post", contentType: "application/json",
+    payload: JSON.stringify(payload), muteHttpExceptions: true
   });
 
   const json = JSON.parse(response.getContentText());
-  
-  if (json.error) {
-    throw new Error("Gemini API Error: " + json.error.message);
-  }
-  
+  if (json.error) throw new Error("Gemini API Error: " + json.error.message);
   if (!json.candidates || !json.candidates[0] || !json.candidates[0].content) {
     throw new Error("Empty response from Gemini");
   }
-  
   return json.candidates[0].content.parts[0].text;
 }
 
@@ -1420,46 +2016,29 @@ function getDocumentAsMarkdown() {
   const doc = DocumentApp.getActiveDocument();
   const body = doc.getBody();
   let markdown = "";
-  const numChildren = body.getNumChildren();
   
-  for (let i = 0; i < numChildren; i++) {
+  for (let i = 0; i < body.getNumChildren(); i++) {
     const child = body.getChild(i);
     const type = child.getType();
     
     if (type === DocumentApp.ElementType.PARAGRAPH) {
       const p = child.asParagraph();
       const text = p.getText().trim();
-      if (!text) { 
-        markdown += "\n"; 
-        continue; 
-      }
-      
+      if (!text) { markdown += "\n"; continue; }
       const heading = p.getHeading();
-      if (heading === DocumentApp.ParagraphHeading.HEADING1) {
-        markdown += "# " + text + "\n\n";
-      } else if (heading === DocumentApp.ParagraphHeading.HEADING2) {
-        markdown += "## " + text + "\n\n";
-      } else if (heading === DocumentApp.ParagraphHeading.HEADING3) {
-        markdown += "### " + text + "\n\n";
-      } else {
-        markdown += text + "\n\n";
-      }
-    } 
-    else if (type === DocumentApp.ElementType.LIST_ITEM) {
+      if (heading === DocumentApp.ParagraphHeading.HEADING1) markdown += "# " + text + "\n\n";
+      else if (heading === DocumentApp.ParagraphHeading.HEADING2) markdown += "## " + text + "\n\n";
+      else if (heading === DocumentApp.ParagraphHeading.HEADING3) markdown += "### " + text + "\n\n";
+      else markdown += text + "\n\n";
+    } else if (type === DocumentApp.ElementType.LIST_ITEM) {
       const item = child.asListItem();
       const text = item.getText().trim();
-      const glyph = item.getGlyphType();
-      if (glyph === DocumentApp.GlyphType.BULLET) {
-        markdown += "- " + text + "\n";
-      } else {
-        markdown += "1. " + text + "\n";
-      }
-    }
-    else if (type === DocumentApp.ElementType.INLINE_IMAGE) {
+      if (item.getGlyphType() === DocumentApp.GlyphType.BULLET) markdown += "- " + text + "\n";
+      else markdown += "1. " + text + "\n";
+    } else if (type === DocumentApp.ElementType.INLINE_IMAGE) {
       markdown += "[Image]\n\n";
     }
   }
-  
   return markdown || "Document is empty.";
 }
 
@@ -1467,12 +2046,8 @@ function insertMarkdownToDocument(markdown) {
   try {
     const doc = DocumentApp.getActiveDocument();
     const result = insertMarkdownAtCursor(doc, markdown);
-    
-    if (result.success) {
-      return { success: true, message: 'Text inserted successfully!' };
-    } else {
-      return { success: false, message: result.error };
-    }
+    if (result.success) return { success: true, message: 'Text inserted successfully!' };
+    else return { success: false, message: result.error };
   } catch (e) {
     return { success: false, message: 'Insert error: ' + e.toString() };
   }
@@ -1480,18 +2055,10 @@ function insertMarkdownToDocument(markdown) {
 
 function insertMarkdownAtCursor(doc, markdown) {
   try {
-    if (!markdown || typeof markdown !== 'string') {
-      return { success: false, error: 'Text is empty or invalid' };
-    }
-
-    if (!doc) {
-      return { success: false, error: 'Document not found' };
-    }
-
+    if (!markdown || typeof markdown !== 'string') return { success: false, error: 'Text is empty or invalid' };
+    if (!doc) return { success: false, error: 'Document not found' };
     const body = doc.getBody();
-    if (!body) {
-      return { success: false, error: 'Document body not found' };
-    }
+    if (!body) return { success: false, error: 'Document body not found' };
     
     const lines = markdown.split('\n');
     const cursor = doc.getCursor();
@@ -1501,18 +2068,15 @@ function insertMarkdownAtCursor(doc, markdown) {
     if (cursor) {
       const element = cursor.getElement();
       let currentElement = element;
-
       while (currentElement.getParent() && 
              currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
         currentElement = currentElement.getParent();
       }
-      
       insertIndex = body.getChildIndex(currentElement);
       
       if (element.getType() === DocumentApp.ElementType.TEXT) {
         const offset = cursor.getOffset();
         const fullText = element.asText().getText();
-        
         if (offset > 0 && offset < fullText.length) {
           const before = fullText.substring(0, offset);
           const after = fullText.substring(offset);
@@ -1528,57 +2092,42 @@ function insertMarkdownAtCursor(doc, markdown) {
       }
     }
 
-    if (insertAfterCurrentParagraph) {
-      insertIndex++;
-    }
-
+    if (insertAfterCurrentParagraph) insertIndex++;
     let currentIndex = insertIndex;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
-      
-      if (trimmed === '') {
-        body.insertParagraph(currentIndex++, '');
-        continue;
-      }
+      if (trimmed === '') { body.insertParagraph(currentIndex++, ''); continue; }
 
       const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
       if (imageMatch) {
-        const alt = imageMatch[1];
-        const imageUrl = imageMatch[2];
-        currentIndex = insertImageFromUrl(body, currentIndex, imageUrl, alt);
+        currentIndex = insertImageFromUrl(body, currentIndex, imageMatch[2], imageMatch[1]);
         continue;
       }
 
       if (trimmed.startsWith('# ')) {
         const p = body.insertParagraph(currentIndex++, trimmed.substring(2));
         p.setHeading(DocumentApp.ParagraphHeading.HEADING1);
-      } 
-      else if (trimmed.startsWith('## ')) {
+      } else if (trimmed.startsWith('## ')) {
         const p = body.insertParagraph(currentIndex++, trimmed.substring(3));
         p.setHeading(DocumentApp.ParagraphHeading.HEADING2);
-      } 
-      else if (trimmed.startsWith('### ')) {
+      } else if (trimmed.startsWith('### ')) {
         const p = body.insertParagraph(currentIndex++, trimmed.substring(4));
         p.setHeading(DocumentApp.ParagraphHeading.HEADING3);
-      } 
-      else if (trimmed.match(/^\s*[-*+]\s/)) {
+      } else if (trimmed.match(/^\s*[-*+]\s/)) {
         const p = body.insertListItem(currentIndex++, trimmed.replace(/^\s*[-*+]\s/, ''));
         p.setGlyphType(DocumentApp.GlyphType.BULLET);
         applyInlineFormatting(p);
-      } 
-      else if (trimmed.match(/^\s*\d+\.\s/)) {
+      } else if (trimmed.match(/^\s*\d+\.\s/)) {
         const p = body.insertListItem(currentIndex++, trimmed.replace(/^\s*\d+\.\s/, ''));
         p.setGlyphType(DocumentApp.GlyphType.NUMBER);
         applyInlineFormatting(p);
-      } 
-      else {
+      } else {
         const p = body.insertParagraph(currentIndex++, trimmed);
         applyInlineFormatting(p);
       }
     }
-    
     return { success: true };
   } catch (e) {
     Logger.log('Error in insertMarkdownAtCursor: ' + e.toString());
@@ -1588,14 +2137,11 @@ function insertMarkdownAtCursor(doc, markdown) {
 
 function getMimeTypeFromUrl(url) {
   const urlLower = url.toLowerCase().split('?')[0];
-  
   if (urlLower.endsWith('.png')) return 'image/png';
   if (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg')) return 'image/jpeg';
   if (urlLower.endsWith('.gif')) return 'image/gif';
   if (urlLower.endsWith('.webp')) return 'image/webp';
   if (urlLower.endsWith('.svg')) return 'image/svg+xml';
-  if (urlLower.endsWith('.bmp')) return 'image/bmp';
-  
   return 'image/png';
 }
 
@@ -1607,22 +2153,16 @@ function insertImageFromUrl(body, index, imageUrl, altText) {
     }
 
     const response = UrlFetchApp.fetch(imageUrl, {
-      muteHttpExceptions: true,
-      followRedirects: true,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+      muteHttpExceptions: true, followRedirects: true,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
     });
     
-    const responseCode = response.getResponseCode();
-    
-    if (responseCode !== 200) {
-      body.insertParagraph(index, '[Failed to load image: code ' + responseCode + ']');
+    if (response.getResponseCode() !== 200) {
+      body.insertParagraph(index, '[Failed to load image]');
       return index + 1;
     }
 
     const bytes = response.getContent();
-    
     if (!bytes || bytes.length === 0) {
       body.insertParagraph(index, '[Empty image]');
       return index + 1;
@@ -1630,36 +2170,22 @@ function insertImageFromUrl(body, index, imageUrl, altText) {
 
     const mimeType = getMimeTypeFromUrl(imageUrl);
     const imageBlob = Utilities.newBlob(bytes, mimeType, altText || 'image');
-    
-    if (!imageBlob || !imageBlob.getBytes() || imageBlob.getBytes().length === 0) {
-      body.insertParagraph(index, '[Error creating image]');
-      return index + 1;
-    }
-
     const image = body.insertImage(index, imageBlob);
     
     if (altText) {
-      try {
-        image.setAltDescription(altText);
-        image.setAltTitle(altText);
-      } catch (e) {
-        Logger.log('Failed to set alt: ' + e.toString());
-      }
+      try { image.setAltDescription(altText); image.setAltTitle(altText); } catch (e) {}
     }
     
     try {
       const originalWidth = image.getWidth();
       const originalHeight = image.getHeight();
       const maxWidth = 450;
-      
       if (originalWidth > maxWidth) {
         const ratio = maxWidth / originalWidth;
         image.setWidth(maxWidth);
         image.setHeight(Math.round(originalHeight * ratio));
       }
-    } catch (e) {
-      Logger.log('Failed to resize: ' + e.toString());
-    }
+    } catch (e) {}
     
     return index + 1;
   } catch (e) {
@@ -1676,50 +2202,38 @@ function applyInlineFormatting(paragraph) {
   const boldRegex = /\*\*(.+?)\*\*/g;
   let match;
   const boldRanges = [];
-  
   while ((match = boldRegex.exec(text)) !== null) {
     boldRanges.push({ start: match.index, end: match.index + match[0].length, content: match[1] });
   }
   
   let processedText = text;
   let offset = 0;
-  
   for (let i = boldRanges.length - 1; i >= 0; i--) {
     const range = boldRanges[i];
     processedText = processedText.substring(0, range.start) + range.content + processedText.substring(range.end);
-    
     const startPos = range.start - offset;
     const endPos = startPos + range.content.length - 1;
     textObj.setBold(startPos, endPos, true);
-    
     offset += (range.end - range.start) - range.content.length;
   }
   
   text = processedText;
   const italicRegex = /\*([^*]+?)\*/g;
   const italicRanges = [];
-  
   while ((match = italicRegex.exec(text)) !== null) {
     italicRanges.push({ start: match.index, end: match.index + match[0].length, content: match[1] });
   }
   
   processedText = text;
   offset = 0;
-  
   for (let i = italicRanges.length - 1; i >= 0; i--) {
     const range = italicRanges[i];
     processedText = processedText.substring(0, range.start) + range.content + processedText.substring(range.end);
-    
     const startPos = range.start - offset;
     const endPos = startPos + range.content.length - 1;
     textObj.setItalic(startPos, endPos, true);
-    
     offset += (range.end - range.start) - range.content.length;
   }
   
   paragraph.setText(processedText);
-}
-
-function getConversationHistory() {
-  return [];
 }
