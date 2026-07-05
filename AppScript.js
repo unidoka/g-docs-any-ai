@@ -5,10 +5,10 @@ function onOpen() {
   try {
     const ui = DocumentApp.getUi();
     
-    const gostMenu = ui.createMenu('📋 ГОСТ')
-        .addItem('📐 Применить настройки', 'applyGOSTSettings')
-        .addItem('📄 Создать титульный лист', 'createTitlePage')
-        .addItem('📑 Создать содержание', 'createTableOfContents');
+    const gostMenu = ui.createMenu('ГОСТ')
+        .addItem('Применить настройки', 'applyGOSTSettings')
+        .addItem('Создать титульный лист', 'createTitlePage')
+        .addItem('Создать содержание', 'createTableOfContents');
     
     ui.createMenu('✨ Gemini Docs')
         .addItem('💬 Открыть чат-ассистент', 'showSidebar')
@@ -19,8 +19,6 @@ function onOpen() {
     Logger.log('onOpen() вызвана из неправильного контекста: ' + e.toString());
   }
 }
-
-// ===== НАСТРОЙКИ =====
 
 function saveSettings(apiKey, modelName, baseUrl) {
   try {
@@ -73,15 +71,13 @@ function testConnection() {
     const json = JSON.parse(response.getContentText());
     if (json.error) return { success: false, error: json.error.message };
     if (json.candidates && json.candidates[0]) {
-      return { success: true, message: '✅ Подключение успешно! Модель: ' + modelName };
+      return { success: true, message: 'Подключение успешно! Модель: ' + modelName };
     }
     return { success: false, error: 'Неожиданный ответ от API' };
   } catch (e) {
     return { success: false, error: e.toString() };
   }
 }
-
-// ===== ГОСТ ФУНКЦИИ =====
 
 function applyGOSTSettings() {
   try {
@@ -151,9 +147,9 @@ function applyGOSTSettings() {
     footerPara.setFontSize(14);
     footerPara.appendPageNumber(DocumentApp.PageNumber.CURRENT);
     
-    DocumentApp.getUi().alert('✅ Настройки ГОСТ применены!');
+    DocumentApp.getUi().alert('Настройки ГОСТ применены!');
   } catch (e) {
-    DocumentApp.getUi().alert('❌ Ошибка применения ГОСТ: ' + e.toString());
+    DocumentApp.getUi().alert('Ошибка применения ГОСТ: ' + e.toString());
   }
 }
 
@@ -169,7 +165,7 @@ function createTitlePage() {
     if (response.getSelectedButton() !== ui.Button.OK) return;
     
     const lines = response.getResponseText().split('\n').map(l => l.trim()).filter(l => l);
-    if (lines.length < 7) { ui.alert('❌ Нужно минимум 7 строк.'); return; }
+    if (lines.length < 7) { ui.alert('Нужно минимум 7 строк.'); return; }
     
     const doc = DocumentApp.getActiveDocument();
     const body = doc.getBody();
@@ -201,9 +197,9 @@ function createTitlePage() {
     cityYearPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER); cityYearPara.setSpacingBefore(100);
     
     body.insertPageBreak(6);
-    ui.alert('✅ Титульный лист создан!');
+    ui.alert('Титульный лист создан!');
   } catch (e) {
-    DocumentApp.getUi().alert('❌ Ошибка: ' + e.toString());
+    DocumentApp.getUi().alert('Ошибка: ' + e.toString());
   }
 }
 
@@ -258,13 +254,11 @@ function createTableOfContents() {
     }
     
     body.insertPageBreak(currentIndex);
-    DocumentApp.getUi().alert('✅ Содержание создано!\n\nНайдено разделов: ' + headings.length);
+    DocumentApp.getUi().alert('Содержание создано!\n\nНайдено разделов: ' + headings.length);
   } catch (e) {
-    DocumentApp.getUi().alert('❌ Ошибка: ' + e.toString());
+    DocumentApp.getUi().alert('Ошибка: ' + e.toString());
   }
 }
-
-// ===== САЙДБАР =====
 
 function showSidebar() {
   try {
@@ -390,7 +384,6 @@ function showSidebar() {
       box-shadow: 0 0 4px var(--success-color);
     }
 
-    /* ===== ВЫПАДАЮЩАЯ ПАНЕЛЬ-СПИСОК ===== */
     .dropdown-panel {
       position: absolute;
       top: calc(100% + 4px);
@@ -589,7 +582,6 @@ function showSidebar() {
       margin: 2px 0;
     }
 
-    /* Кнопка настроек API */
     .api-settings-btn {
       display: flex;
       align-items: center;
@@ -678,7 +670,6 @@ function showSidebar() {
       flex-shrink: 0;
     }
 
-    /* ===== МОДАЛЬНОЕ ОКНО ===== */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -909,7 +900,6 @@ function showSidebar() {
       color: var(--error-color);
     }
 
-    /* ===== ЧАТ ===== */
     .chat-container {
       flex: 1;
       padding: 8px;
@@ -1161,7 +1151,6 @@ function showSidebar() {
 </head>
 <body>
 
-  <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
   <div class="top-bar">
     <div class="top-bar-title">
       <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
@@ -1249,7 +1238,6 @@ function showSidebar() {
     </div>
   </div>
 
-  <!-- Модальное окно настроек API -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal">
       <div class="modal-header">
@@ -1354,8 +1342,6 @@ function showSidebar() {
   <script>
     let selectedImageBase64 = null;
     let selectedImageName = '';
-
-    // ===== ВЫПАДАЮЩЕЕ МЕНЮ =====
     
     const paramsBtn = document.getElementById('paramsBtn');
     const dropdownPanel = document.getElementById('dropdownPanel');
@@ -1376,14 +1362,12 @@ function showSidebar() {
       paramsBtn.classList.remove('active');
     }
 
-    // Закрытие при клике вне меню
     document.addEventListener('click', function(e) {
       if (!dropdownPanel.contains(e.target) && !paramsBtn.contains(e.target)) {
         closeDropdown();
       }
     });
 
-    // Закрытие по Escape
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
         const modal = document.getElementById('settingsModal');
@@ -1395,7 +1379,6 @@ function showSidebar() {
       }
     });
 
-    // Обновление индикатора статуса API
     function updateApiStatusIndicator(isConfigured) {
       const indicator = document.getElementById('apiStatusIndicator');
       const dot = document.getElementById('configDot');
@@ -1412,8 +1395,6 @@ function showSidebar() {
         dot.title = 'API не настроен';
       }
     }
-
-    // Проверка статуса API при загрузке
     google.script.run
       .withSuccessHandler((settings) => {
         if (settings.success && settings.apiKey) {
@@ -1421,8 +1402,6 @@ function showSidebar() {
         }
       })
       .getSettings();
-
-    // ===== СЕГМЕНТИРОВАННЫЙ КОНТРОЛЬ =====
     
     document.querySelectorAll('.segment').forEach(segment => {
       segment.addEventListener('click', function(e) {
@@ -1432,8 +1411,6 @@ function showSidebar() {
         this.querySelector('input').checked = true;
       });
     });
-
-    // ===== ПЕРЕКЛЮЧАТЕЛЬ ИЗОБРАЖЕНИЙ =====
     
     const imageToggle = document.getElementById('imageToggle');
     const withImagesCheckbox = document.getElementById('withImages');
@@ -1470,8 +1447,6 @@ function showSidebar() {
         })
         .getSelectedText();
     }
-
-    // ===== НАСТРОЙКИ API =====
     
     function openSettings() {
       closeDropdown();
@@ -1516,30 +1491,30 @@ function showSidebar() {
       
       const saveBtn = document.getElementById('saveBtn');
       saveBtn.disabled = true;
-      saveBtn.innerText = '⏳';
+      saveBtn.innerText = '';
       
       google.script.run
         .withSuccessHandler((result) => {
           saveBtn.disabled = false;
-          saveBtn.innerText = '💾 Сохранить';
+          saveBtn.innerText = 'Сохранить';
           
           const status = document.getElementById('settingsStatus');
           if (result.success) {
             status.className = 'status-message visible success';
-            status.innerText = '✅ Настройки успешно сохранены!';
+            status.innerText = 'Настройки успешно сохранены!';
             updateApiStatusIndicator(!!apiKey);
             setTimeout(() => closeSettings(), 1200);
           } else {
             status.className = 'status-message visible error';
-            status.innerText = '❌ Ошибка: ' + result.error;
+            status.innerText = 'Ошибка: ' + result.error;
           }
         })
         .withFailureHandler((err) => {
           saveBtn.disabled = false;
-          saveBtn.innerText = '💾 Сохранить';
+          saveBtn.innerText = 'Сохранить';
           const status = document.getElementById('settingsStatus');
           status.className = 'status-message visible error';
-          status.innerText = '❌ Ошибка: ' + err.message;
+          status.innerText = 'Ошибка: ' + err.message;
         })
         .saveSettings(apiKey, modelName, baseUrl);
     }
@@ -1547,14 +1522,14 @@ function showSidebar() {
     function testApiConnection() {
       const testBtn = document.getElementById('testBtn');
       testBtn.disabled = true;
-      testBtn.innerText = '⏳ Проверка...';
+      testBtn.innerText = 'Проверка...';
       
       const status = document.getElementById('settingsStatus');
       
       google.script.run
         .withSuccessHandler((result) => {
           testBtn.disabled = false;
-          testBtn.innerText = '🔌 Тест';
+          testBtn.innerText = 'Тест';
           
           if (result.success) {
             status.className = 'status-message visible success';
@@ -1562,14 +1537,14 @@ function showSidebar() {
             updateApiStatusIndicator(true);
           } else {
             status.className = 'status-message visible error';
-            status.innerText = '❌ ' + result.error;
+            status.innerText = '' + result.error;
           }
         })
         .withFailureHandler((err) => {
           testBtn.disabled = false;
           testBtn.innerText = '🔌 Тест';
           status.className = 'status-message visible error';
-          status.innerText = '❌ Ошибка: ' + err.message;
+          status.innerText = 'Ошибка: ' + err.message;
         })
         .testConnection();
     }
@@ -1577,8 +1552,6 @@ function showSidebar() {
     document.getElementById('settingsModal').addEventListener('click', function(e) {
       if (e.target === this) closeSettings();
     });
-
-    // ===== ИЗОБРАЖЕНИЯ =====
     
     function uploadImage() {
       document.getElementById('imageInput').click();
@@ -1608,8 +1581,6 @@ function showSidebar() {
       document.getElementById('attachmentThumb').src = '';
       document.getElementById('attachmentName').innerText = '';
     }
-
-    // ===== ЧАТ =====
     
     function addMessage(text, isUser, showInsertBtn) {
       const chat = document.getElementById('chat');
@@ -1622,7 +1593,7 @@ function showSidebar() {
         div.innerText = text;
         const btn = document.createElement('button');
         btn.className = 'insert-btn';
-        btn.innerText = '📄 Вставить';
+        btn.innerText = 'Вставить';
         btn.onclick = function() { insertResponse(btn, text); };
         div.appendChild(document.createElement('br'));
         div.appendChild(btn);
@@ -1637,7 +1608,7 @@ function showSidebar() {
       const div = document.createElement('div');
       div.className = 'message ai loading';
       div.id = 'loading-message';
-      div.innerText = '⏳ Генерация...';
+      div.innerText = 'Генерация...';
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
       document.getElementById('sendBtn').disabled = true;
@@ -1704,20 +1675,20 @@ function showSidebar() {
 
     function insertResponse(btn, messageText) {
       btn.disabled = true;
-      btn.innerText = '⏳';
+      btn.innerText = '';
       
       google.script.run
         .withSuccessHandler((res) => {
           if (res.success) {
-            btn.innerText = '✅';
+            btn.innerText = '';
             btn.style.background = 'var(--success-color)';
           } else {
-            btn.innerText = '❌';
+            btn.innerText = '';
             btn.style.background = 'var(--error-color)';
           }
         })
         .withFailureHandler((err) => {
-          btn.innerText = '❌';
+          btn.innerText = '';
           btn.style.background = 'var(--error-color)';
           alert("Ошибка: " + err.message);
         })
