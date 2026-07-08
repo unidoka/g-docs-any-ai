@@ -1,32 +1,43 @@
-const GEMINI_MODEL = "gemini-2.0-flash";
-const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
+/* 
+  Set up 3 env variables:
+  1) Extensions -> AppScripts
+  2) Project Settings tab (with the gear icon)
+  3) Script Properties -> Edit script properties
+  4) Add next properties
+    - AI_API_KEY (e.g. YOUR_API_KEY)
+    - AI_BASE_URL (e.g. https://ai.api.cloud.yandex.net/v1)
+    - AI_MODEL_NAME (e.g. gpt://b1gd47capubi1hd3o34p/deepseek-v4-flash/latest)
+*/
+
+const DEFAULT_MODEL = "gemini-2.0-flash";
+const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
 
 function onOpen() {
   try {
     const ui = DocumentApp.getUi();
-    
-    const gostMenu = ui.createMenu('ГОСТ')
-        .addItem('Применить настройки', 'applyGOSTSettings')
-        .addItem('Создать титульный лист', 'createTitlePage')
-        .addItem('Создать содержание', 'createTableOfContents');
-    
-    ui.createMenu('Gemini Docs')
-        .addItem('Открыть чат-ассистент', 'showSidebar')
-        .addSeparator()
-        .addSubMenu(gostMenu)
-        .addToUi();
+
+    const helperMenu = ui.createMenu('AI Assistant')
+      .addItem('Open Chat Sidebar', 'showSidebar')
+      .addSeparator()
+      .addSubMenu(
+        ui.createMenu('Document Tools')
+          .addItem('Apply GOST Settings', 'applyGOSTSettings')
+          .addItem('Create Title Page', 'createTitlePage')
+          .addItem('Create Table of Contents', 'createTableOfContents')
+      );
+    helperMenu.addToUi();
   } catch (e) {
-    Logger.log('onOpen() вызвана из неправильного контекста: ' + e.toString());
+    Logger.log('onOpen() called from wrong context: ' + e.toString());
   }
 }
 
 function saveSettings(apiKey, modelName, baseUrl) {
   try {
     const props = PropertiesService.getScriptProperties();
-    if (apiKey && apiKey.trim()) props.setProperty('GEMINI_API_KEY', apiKey.trim());
+    if (apiKey && apiKey.trim()) props.setProperty('AI_API_KEY', apiKey.trim());
     if (modelName && modelName.trim()) props.setProperty('AI_MODEL_NAME', modelName.trim());
     if (baseUrl && baseUrl.trim()) props.setProperty('AI_BASE_URL', baseUrl.trim());
-    return { success: true, message: 'Настройки сохранены!' };
+    return { success: true, message: 'Settings saved successfully!' };
   } catch (e) {
     return { success: false, error: e.toString() };
   }
@@ -37,8 +48,8 @@ function getSettings() {
     const props = PropertiesService.getScriptProperties();
     return {
       success: true,
-      apiKey: props.getProperty('GEMINI_API_KEY') || '',
-      modelName: props.getProperty('AI_MODEL_NAME') || GEMINI_MODEL,
+      apiKey: props.getProperty('AI_API_KEY') || '',
+      modelName: props.getProperty('AI_MODEL_NAME') || DEFAULT_MODEL,
       baseUrl: props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL
     };
   } catch (e) {
@@ -49,56 +60,63 @@ function getSettings() {
 function testConnection() {
   try {
     const props = PropertiesService.getScriptProperties();
-    const apiKey = props.getProperty('GEMINI_API_KEY');
-    const modelName = props.getProperty('AI_MODEL_NAME') || GEMINI_MODEL;
+    const apiKey = props.getProperty('AI_API_KEY');
+    const modelName = props.getProperty('AI_MODEL_NAME') || DEFAULT_MODEL;
     const baseUrl = props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL;
-    
-    if (!apiKey) return { success: false, error: 'API-ключ не задан. Сохраните настройки.' };
-    
-    const url = baseUrl + modelName + ':generateContent?key=' + apiKey;
+
+    if (!apiKey) return { success: false, error: 'API Key missing. Please save your settings.' };
+
+    // Standard OpenAI-compatible test payload
     const payload = {
-      contents: [{ parts: [{ text: 'Say "OK" if you can read this.' }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 10 }
+      model: modelName,
+      messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: "Say 'OK' if you are alive." }
+      ],
+      temperature: 0.1,
+      max_tokens: 10
     };
+
+    const url = baseUrl + '/chat/completions';
+    const authType = baseUrl.includes('yandex') ? 'Api-Key' : 'Bearer';
 
     const response = UrlFetchApp.fetch(url, {
       method: "post",
-      contentType: "application/json",
+      headers: {
+        'Authorization': authType + ' ' + apiKey,
+        'Content-Type': 'application/json'
+      },
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     });
 
     const json = JSON.parse(response.getContentText());
     if (json.error) return { success: false, error: json.error.message };
-    if (json.candidates && json.candidates[0]) {
-      return { success: true, message: 'Подключение успешно! Модель: ' + modelName };
+    if (json.choices && json.choices[0]) {
+      return { success: true, message: 'Connection successful! Model: ' + modelName };
     }
-    return { success: false, error: 'Неожиданный ответ от API' };
+    return { success: false, error: 'Unexpected API response structure.' };
   } catch (e) {
     return { success: false, error: e.toString() };
   }
 }
 
+/* ---------- GOST & DOCUMENT UTILS ---------- */
 function applyGOSTSettings() {
   try {
     const doc = DocumentApp.getActiveDocument();
     const body = doc.getBody();
-    
-    const leftMargin = 30 * 2.83465;
-    const rightMargin = 10 * 2.83465;
-    const topMargin = 20 * 2.83465;
-    const bottomMargin = 20 * 2.83465;
-    
-    body.setMarginLeft(leftMargin);
-    body.setMarginRight(rightMargin);
-    body.setMarginTop(topMargin);
-    body.setMarginBottom(bottomMargin);
-    
+
+    body.setMarginLeft(30 * 2.83465);
+    body.setMarginRight(10 * 2.83465);
+    body.setMarginTop(20 * 2.83465);
+    body.setMarginBottom(20 * 2.83465);
+
     const paragraphs = body.getParagraphs();
     for (let i = 0; i < paragraphs.length; i++) {
       const para = paragraphs[i];
       const heading = para.getHeading();
-      
+
       if (heading === DocumentApp.ParagraphHeading.NORMAL) {
         para.setFontFamily('Times New Roman');
         para.setFontSize(14);
@@ -138,7 +156,7 @@ function applyGOSTSettings() {
         para.setIndentFirstLine(0);
       }
     }
-    
+
     const footer = doc.getFooter();
     footer.clear();
     const footerPara = footer.getParagraphs()[0];
@@ -146,10 +164,10 @@ function applyGOSTSettings() {
     footerPara.setFontFamily('Times New Roman');
     footerPara.setFontSize(14);
     footerPara.appendPageNumber(DocumentApp.PageNumber.CURRENT);
-    
-    DocumentApp.getUi().alert('Настройки ГОСТ применены!');
+
+    DocumentApp.getUi().alert('GOST settings applied!');
   } catch (e) {
-    DocumentApp.getUi().alert('Ошибка применения ГОСТ: ' + e.toString());
+    DocumentApp.getUi().alert('Error applying GOST: ' + e.toString());
   }
 }
 
@@ -157,49 +175,49 @@ function createTitlePage() {
   try {
     const ui = DocumentApp.getUi();
     const response = ui.prompt(
-      'Создание титульного листа',
-      'Введите данные в формате:\n\n' +
-      'Организация\nНазвание работы\nТип работы\nАвтор\nРуководитель\nГород\nГод',
+      'Create Title Page',
+      'Enter data in format (line by line):\n\n' +
+      'Organization Name\nWork Title\nWork Type\nAuthor\nSupervisor\nCity\nYear',
       ui.ButtonSet.OK_CANCEL
     );
     if (response.getSelectedButton() !== ui.Button.OK) return;
-    
+
     const lines = response.getResponseText().split('\n').map(l => l.trim()).filter(l => l);
-    if (lines.length < 7) { ui.alert('Нужно минимум 7 строк.'); return; }
-    
+    if (lines.length < 7) { ui.alert('Minimum 7 lines required.'); return; }
+
     const doc = DocumentApp.getActiveDocument();
     const body = doc.getBody();
     applyGOSTSettings();
-    
+
     const orgPara = body.insertParagraph(0, lines[0].toUpperCase());
     orgPara.setFontFamily('Times New Roman'); orgPara.setFontSize(14);
     orgPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER); orgPara.setSpacingAfter(6);
-    
+
     const titlePara = body.insertParagraph(1, lines[1].toUpperCase());
     titlePara.setFontFamily('Times New Roman'); titlePara.setFontSize(16); titlePara.setBold(true);
     titlePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
     titlePara.setSpacingBefore(60); titlePara.setSpacingAfter(12);
-    
+
     const typePara = body.insertParagraph(2, lines[2]);
     typePara.setFontFamily('Times New Roman'); typePara.setFontSize(14);
     typePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER); typePara.setSpacingAfter(40);
-    
-    const authorPara = body.insertParagraph(3, 'Выполнил: ' + lines[3]);
+
+    const authorPara = body.insertParagraph(3, 'Done by: ' + lines[3]);
     authorPara.setFontFamily('Times New Roman'); authorPara.setFontSize(14);
     authorPara.setAlignment(DocumentApp.HorizontalAlignment.RIGHT); authorPara.setSpacingAfter(6);
-    
-    const supervisorPara = body.insertParagraph(4, 'Руководитель: ' + lines[4]);
+
+    const supervisorPara = body.insertParagraph(4, 'Supervisor: ' + lines[4]);
     supervisorPara.setFontFamily('Times New Roman'); supervisorPara.setFontSize(14);
     supervisorPara.setAlignment(DocumentApp.HorizontalAlignment.RIGHT); supervisorPara.setSpacingAfter(80);
-    
+
     const cityYearPara = body.insertParagraph(5, lines[5] + ', ' + lines[6]);
     cityYearPara.setFontFamily('Times New Roman'); cityYearPara.setFontSize(14);
     cityYearPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER); cityYearPara.setSpacingBefore(100);
-    
+
     body.insertPageBreak(6);
-    ui.alert('Титульный лист создан!');
+    ui.alert('Title page created!');
   } catch (e) {
-    DocumentApp.getUi().alert('Ошибка: ' + e.toString());
+    DocumentApp.getUi().alert('Error: ' + e.toString());
   }
 }
 
@@ -207,35 +225,35 @@ function createTableOfContents() {
   try {
     const doc = DocumentApp.getActiveDocument();
     const body = doc.getBody();
-    
+
     let insertIndex = 0;
     for (let i = 0; i < body.getNumChildren(); i++) {
       if (body.getChild(i).getType() === DocumentApp.ElementType.PAGE_BREAK) {
         insertIndex = i + 1; break;
       }
     }
-    
-    const tocTitle = body.insertParagraph(insertIndex, 'СОДЕРЖАНИЕ');
+
+    const tocTitle = body.insertParagraph(insertIndex, 'TABLE OF CONTENTS');
     tocTitle.setFontFamily('Times New Roman'); tocTitle.setFontSize(14); tocTitle.setBold(true);
     tocTitle.setAlignment(DocumentApp.HorizontalAlignment.CENTER); tocTitle.setSpacingAfter(12);
-    
+
     const headings = [];
     for (const para of body.getParagraphs()) {
       const h = para.getHeading();
-      if (h === DocumentApp.ParagraphHeading.HEADING1 || 
-          h === DocumentApp.ParagraphHeading.HEADING2 || 
-          h === DocumentApp.ParagraphHeading.HEADING3) {
+      if (h === DocumentApp.ParagraphHeading.HEADING1 ||
+        h === DocumentApp.ParagraphHeading.HEADING2 ||
+        h === DocumentApp.ParagraphHeading.HEADING3) {
         headings.push({
           text: para.getText().trim(),
           level: h === DocumentApp.ParagraphHeading.HEADING1 ? 1 :
-                 h === DocumentApp.ParagraphHeading.HEADING2 ? 2 : 3
+            h === DocumentApp.ParagraphHeading.HEADING2 ? 2 : 3
         });
       }
     }
-    
+
     let currentIndex = insertIndex + 1;
     let sectionNumber = 1, subSectionNumber = 1;
-    
+
     for (const heading of headings) {
       let prefix = '', indent = 0;
       if (heading.level === 1) {
@@ -247,19 +265,20 @@ function createTableOfContents() {
         prefix = sectionNumber + '.' + subSectionNumber + '.1 ';
         indent = 2.5 * 28.3465;
       }
-      
+
       const tocItem = body.insertParagraph(currentIndex++, prefix + heading.text);
       tocItem.setFontFamily('Times New Roman'); tocItem.setFontSize(14);
       tocItem.setLineSpacing(1.5); tocItem.setIndentStart(indent); tocItem.setSpacingAfter(4);
     }
-    
+
     body.insertPageBreak(currentIndex);
-    DocumentApp.getUi().alert('Содержание создано!\n\nНайдено разделов: ' + headings.length);
+    DocumentApp.getUi().alert('Table of Contents created! Found ' + headings.length + ' sections.');
   } catch (e) {
-    DocumentApp.getUi().alert('Ошибка: ' + e.toString());
+    DocumentApp.getUi().alert('Error: ' + e.toString());
   }
 }
 
+/* ---------- SIDEBAR UI ---------- */
 function showSidebar() {
   try {
     const htmlContent = `
@@ -303,7 +322,6 @@ function showSidebar() {
       font-size: 12px;
     }
 
-    /* ===== ВЕРХНЯЯ ПАНЕЛЬ ===== */
     .top-bar {
       display: flex;
       align-items: center;
@@ -330,7 +348,6 @@ function showSidebar() {
       fill: var(--accent-color);
     }
 
-    /* Кнопка-триггер выпадающего меню */
     .params-btn {
       display: flex;
       align-items: center;
@@ -438,7 +455,6 @@ function showSidebar() {
       gap: 10px;
     }
 
-    /* Элемент списка настроек */
     .setting-item {
       display: flex;
       flex-direction: column;
@@ -462,7 +478,6 @@ function showSidebar() {
       fill: currentColor;
     }
 
-    /* Сегментированный контроль */
     .segmented-control {
       display: flex;
       background-color: var(--bg-color);
@@ -507,7 +522,6 @@ function showSidebar() {
       flex-shrink: 0;
     }
 
-    /* Переключатель изображений */
     .toggle-row {
       display: flex;
       align-items: center;
@@ -575,7 +589,6 @@ function showSidebar() {
 
     .toggle-row input { display: none; }
 
-    /* Разделитель */
     .dropdown-divider {
       height: 1px;
       background-color: var(--border-color);
@@ -1154,62 +1167,60 @@ function showSidebar() {
   <div class="top-bar">
     <div class="top-bar-title">
       <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-      <span>Gemini Docs</span>
+      <span>AI Assistant</span>
     </div>
     
     <button class="params-btn" id="paramsBtn" onclick="toggleDropdown(event)">
       <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
-      <span>Параметры</span>
-      <span class="status-dot" id="configDot" title="API не настроен"></span>
+      <span>Settings</span>
+      <span class="status-dot" id="configDot" title="API not configured"></span>
       <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
     </button>
     
-    <!-- ВЫПАДАЮЩАЯ ПАНЕЛЬ -->
+    <!-- DROPDOWN PANEL -->
     <div class="dropdown-panel" id="dropdownPanel">
       <div class="dropdown-header">
         <div class="dropdown-title">
           <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
-          Параметры генерации
+          Generation Settings
         </div>
       </div>
       
       <div class="dropdown-body">
-        <!-- Режим генерации -->
         <div class="setting-item">
           <div class="setting-label">
             <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-            Объём текста
+            Response Length
           </div>
           <div class="segmented-control">
             <label class="segment active">
               <input type="radio" name="genType" value="full" checked>
               <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-              <span>Полный</span>
+              <span>Full</span>
             </label>
             <label class="segment">
               <input type="radio" name="genType" value="paragraph">
               <svg viewBox="0 0 24 24"><path d="M14 17H4v2h10v-2zm6-8H4v2h16V9zM4 15h16v-2H4v2zM4 5v2h16V5H4z"/></svg>
-              <span>Абзац</span>
+              <span>Paragraph</span>
             </label>
             <label class="segment">
               <input type="radio" name="genType" value="sentence">
               <svg viewBox="0 0 24 24"><path d="M4 9h16v2H4V9zm0 4h10v2H4v-2z"/></svg>
-              <span>Фраза</span>
+              <span>Sentence</span>
             </label>
           </div>
         </div>
         
-        <!-- Переключатель изображений -->
         <div class="setting-item">
           <div class="setting-label">
             <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-            Изображения
+            Images
           </div>
           <label class="toggle-row" id="imageToggle">
             <input type="checkbox" id="withImages">
             <div class="toggle-info">
               <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-              <span>Генерировать с картинками</span>
+              <span>Generate with images</span>
             </div>
             <div class="toggle-switch"></div>
           </label>
@@ -1217,19 +1228,18 @@ function showSidebar() {
         
         <div class="dropdown-divider"></div>
         
-        <!-- Кнопка настроек API -->
         <div class="setting-item">
           <button class="api-settings-btn" onclick="openSettings()">
             <div class="api-settings-icon">
               <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
             </div>
             <div class="api-settings-text">
-              <strong>Настройки API</strong>
-              <span>Ключ, модель и эндпоинт</span>
+              <strong>API Settings</strong>
+              <span>Key, model, and endpoint</span>
             </div>
             <div class="api-status" id="apiStatusIndicator">
               <div class="api-status-dot"></div>
-              <span>Не настроено</span>
+              <span>Not configured</span>
             </div>
             <svg class="chevron-right" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
           </button>
@@ -1243,7 +1253,7 @@ function showSidebar() {
       <div class="modal-header">
         <div class="modal-title">
           <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
-          Настройки AI
+          AI Configuration
         </div>
         <button class="modal-close" onclick="closeSettings()">
           <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
@@ -1254,49 +1264,49 @@ function showSidebar() {
         <div class="form-group">
           <label class="form-label">
             <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
-            API-ключ
+            API Key
           </label>
           <div class="password-wrapper">
-            <input type="password" id="settingsApiKey" class="form-input" placeholder="Введите API-ключ...">
-            <button class="password-toggle" onclick="togglePasswordVisibility()" title="Показать/скрыть">
+            <input type="password" id="settingsApiKey" class="form-input" placeholder="Enter API Key...">
+            <button class="password-toggle" onclick="togglePasswordVisibility()" title="Show/Hide">
               <svg id="eyeIcon" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
             </button>
           </div>
-          <div class="form-hint">Ключ для доступа к API (Gemini, OpenRouter и др.)</div>
+          <div class="form-hint">Key for the AI provider (Gemini, OpenRouter, Yandex, etc.)</div>
         </div>
         
         <div class="form-group">
           <label class="form-label">
             <svg viewBox="0 0 24 24"><path d="M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1-2.73 2.71-2.73 7.08 0 9.79s7.15 2.71 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29-3.51 3.48-9.21 3.48-12.72 0-3.5-3.47-3.5-9.12 0-12.6 3.51-3.47 9.14-3.49 12.65 0L21 3v7.12z"/></svg>
-            Модель AI
+            Model Name
           </label>
-          <input type="text" id="settingsModelName" class="form-input" placeholder="gemini-2.0-flash">
-          <div class="form-hint">Название модели (gemini-2.0-flash, gpt-4o, claude-3-opus и т.д.)</div>
+          <input type="text" id="settingsModelName" class="form-input" placeholder="e.g. gemini-2.0-flash">
+          <div class="form-hint">Model identifier (e.g. gemini-2.0-flash, gpt-4o, or gpt://folder/model/latest)</div>
         </div>
         
         <div class="form-group">
           <label class="form-label">
             <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
-            Базовый URL API
+            Base URL
           </label>
-          <input type="text" id="settingsBaseUrl" class="form-input" placeholder="https://generativelanguage.googleapis.com/v1beta/models/">
-          <div class="form-hint">Для Gemini: https://generativelanguage.googleapis.com/v1beta/models/<br>Для OpenRouter: https://openrouter.ai/api/v1/chat/completions</div>
+          <input type="text" id="settingsBaseUrl" class="form-input" placeholder="https://generativelanguage.googleapis.com/v1beta/openai">
+          <div class="form-hint">Must end with the API path (e.g. https://api.openrouter.ai/v1)</div>
         </div>
         
         <div class="status-message" id="settingsStatus"></div>
       </div>
       
       <div class="modal-footer">
-        <button class="btn-test" id="testBtn" onclick="testApiConnection()">🔌 Тест</button>
-        <button class="btn-secondary" onclick="closeSettings()">Отмена</button>
-        <button class="btn-primary" id="saveBtn" onclick="saveSettingsForm()">💾 Сохранить</button>
+        <button class="btn-test" id="testBtn" onclick="testApiConnection()">🔌 Test</button>
+        <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
+        <button class="btn-primary" id="saveBtn" onclick="saveSettingsForm()">💾 Save</button>
       </div>
     </div>
   </div>
 
   <div class="chat-container" id="chat">
     <div class="welcome-card">
-      Привет! Я помогу создать документацию. Опиши, что нужно добавить.
+      Hello! I help you write documentation. Describe what you need to add.
     </div>
   </div>
 
@@ -1304,7 +1314,7 @@ function showSidebar() {
     <div class="chat-box">
       <div class="mode-indicator" id="modeIndicator">
         <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-        <span>AI будет включать изображения</span>
+        <span>AI will include images</span>
       </div>
       
       <div class="selected-text-indicator" id="selectedTextIndicator">
@@ -1317,22 +1327,22 @@ function showSidebar() {
         <div class="attachment-info">
           <div class="attachment-name" id="attachmentName"></div>
         </div>
-        <button class="attachment-remove" onclick="clearImage()" title="Удалить">
+        <button class="attachment-remove" onclick="clearImage()" title="Remove">
           <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
       </div>
 
-      <input type="text" id="userInput" class="text-input" placeholder="Спросите Gemini..." onkeypress="if(event.key==='Enter') sendMessage()">
+      <input type="text" id="userInput" class="text-input" placeholder="Ask AI..." onkeypress="if(event.key==='Enter') sendMessage()">
       
       <div class="actions-row">
         <div class="left-actions">
-          <button class="icon-btn" title="Прикрепить изображение" onclick="uploadImage()">
+          <button class="icon-btn" title="Attach Image" onclick="uploadImage()">
             <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           </button>
           <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
         </div>
         
-        <button class="btn-send" id="sendBtn" title="Отправить" onclick="sendMessage()">
+        <button class="btn-send" id="sendBtn" title="Send" onclick="sendMessage()">
           <svg viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
         </button>
       </div>
@@ -1385,14 +1395,14 @@ function showSidebar() {
       
       if (isConfigured) {
         indicator.classList.add('configured');
-        indicator.querySelector('span').innerText = 'Настроено';
+        indicator.querySelector('span').innerText = 'Configured';
         dot.classList.add('configured');
-        dot.title = 'API настроен';
+        dot.title = 'API configured';
       } else {
         indicator.classList.remove('configured');
-        indicator.querySelector('span').innerText = 'Не настроено';
+        indicator.querySelector('span').innerText = 'Not configured';
         dot.classList.remove('configured');
-        dot.title = 'API не настроен';
+        dot.title = 'API not configured';
       }
     }
     google.script.run
@@ -1496,25 +1506,25 @@ function showSidebar() {
       google.script.run
         .withSuccessHandler((result) => {
           saveBtn.disabled = false;
-          saveBtn.innerText = 'Сохранить';
+          saveBtn.innerText = 'Save';
           
           const status = document.getElementById('settingsStatus');
           if (result.success) {
             status.className = 'status-message visible success';
-            status.innerText = 'Настройки успешно сохранены!';
+            status.innerText = 'Settings saved successfully!';
             updateApiStatusIndicator(!!apiKey);
             setTimeout(() => closeSettings(), 1200);
           } else {
             status.className = 'status-message visible error';
-            status.innerText = 'Ошибка: ' + result.error;
+            status.innerText = 'Error: ' + result.error;
           }
         })
         .withFailureHandler((err) => {
           saveBtn.disabled = false;
-          saveBtn.innerText = 'Сохранить';
+          saveBtn.innerText = 'Save';
           const status = document.getElementById('settingsStatus');
           status.className = 'status-message visible error';
-          status.innerText = 'Ошибка: ' + err.message;
+          status.innerText = 'Error: ' + err.message;
         })
         .saveSettings(apiKey, modelName, baseUrl);
     }
@@ -1522,14 +1532,14 @@ function showSidebar() {
     function testApiConnection() {
       const testBtn = document.getElementById('testBtn');
       testBtn.disabled = true;
-      testBtn.innerText = 'Проверка...';
+      testBtn.innerText = 'Checking...';
       
       const status = document.getElementById('settingsStatus');
       
       google.script.run
         .withSuccessHandler((result) => {
           testBtn.disabled = false;
-          testBtn.innerText = 'Тест';
+          testBtn.innerText = 'Test';
           
           if (result.success) {
             status.className = 'status-message visible success';
@@ -1542,9 +1552,9 @@ function showSidebar() {
         })
         .withFailureHandler((err) => {
           testBtn.disabled = false;
-          testBtn.innerText = '🔌 Тест';
+          testBtn.innerText = '🔌 Test';
           status.className = 'status-message visible error';
-          status.innerText = 'Ошибка: ' + err.message;
+          status.innerText = 'Error: ' + err.message;
         })
         .testConnection();
     }
@@ -1593,7 +1603,7 @@ function showSidebar() {
         div.innerText = text;
         const btn = document.createElement('button');
         btn.className = 'insert-btn';
-        btn.innerText = 'Вставить';
+        btn.innerText = 'Insert';
         btn.onclick = function() { insertResponse(btn, text); };
         div.appendChild(document.createElement('br'));
         div.appendChild(btn);
@@ -1608,7 +1618,7 @@ function showSidebar() {
       const div = document.createElement('div');
       div.className = 'message ai loading';
       div.id = 'loading-message';
-      div.innerText = 'Генерация...';
+      div.innerText = 'Generating...';
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
       document.getElementById('sendBtn').disabled = true;
@@ -1633,9 +1643,9 @@ function showSidebar() {
         messageText += (text ? '\\n\\n' : '') + '[Image: ' + selectedImageName + ']';
       }
       
-      const genTypeLabels = { 'full': 'Полный', 'paragraph': 'Абзац', 'sentence': 'Фраза' };
+      const genTypeLabels = { 'full': 'Full', 'paragraph': 'Paragraph', 'sentence': 'Sentence' };
       messageText += ' [' + genTypeLabels[genType] + ']';
-      if (withImages) messageText += ' [Картинки]';
+      if (withImages) messageText += ' [Images]';
 
       addMessage(messageText, true);
       input.value = '';
@@ -1653,11 +1663,11 @@ function showSidebar() {
       const handlerSuccess = (res) => {
         hideLoading();
         if (res.success) addMessage(res.response, false);
-        else addMessage("Ошибка: " + res.error, false, false);
+        else addMessage("Error: " + res.error, false, false);
       };
       const handlerFailure = (err) => {
         hideLoading();
-        addMessage("Ошибка: " + err.message, false, false);
+        addMessage("Error: " + err.message, false, false);
       };
 
       if (hasImage) {
@@ -1690,7 +1700,7 @@ function showSidebar() {
         .withFailureHandler((err) => {
           btn.innerText = '';
           btn.style.background = 'var(--error-color)';
-          alert("Ошибка: " + err.message);
+          alert("Error: " + err.message);
         })
         .insertMarkdownToDocument(messageText);
     }
@@ -1698,25 +1708,26 @@ function showSidebar() {
 </body>
 </html>
     `;
-    
+
     const html = HtmlService.createHtmlOutput(htmlContent)
-        .setTitle('Gemini Documentation Assistant')
-        .setWidth(400);
+      .setTitle('AI Documentation Assistant')
+      .setWidth(400);
     DocumentApp.getUi().showSidebar(html);
   } catch (e) {
     Logger.log('showSidebar() should be launched from Google Docs menu. Error: ' + e.toString());
   }
 }
 
+/* ---------- AI BACKEND ---------- */
 function getSelectedText() {
   try {
     const doc = DocumentApp.getActiveDocument();
     const selection = doc.getSelection();
     if (!selection) return '';
-    
+
     const elements = selection.getSelectedElements();
     let selectedText = '';
-    
+
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i].getElement();
       if (element.getType() === DocumentApp.ElementType.TEXT) {
@@ -1745,10 +1756,10 @@ function sendChatMessage(userMessage, genType, withImages) {
     const currentSection = getCurrentSectionMarkdown();
     const docStyles = getDocumentStyleGuide();
     const selectedText = getSelectedText();
-    
+
     let genTypeText = '', maxTokens = 8192;
     if (genType === 'full') {
-      genTypeText = 'full text for the current section (multiple paragraphs, subheadings, lists if needed)';
+      genTypeText = 'full text (multiple paragraphs, subheadings, lists if needed)';
       maxTokens = 8192;
     } else if (genType === 'paragraph') {
       genTypeText = 'one paragraph (3-5 sentences)';
@@ -1757,29 +1768,30 @@ function sendChatMessage(userMessage, genType, withImages) {
       genTypeText = '1-2 sentences';
       maxTokens = 256;
     }
-    
+
     let imageInstruction = '';
     if (withImages) {
       imageInstruction = '\n\nIMPORTANT: Include 1-2 relevant images in format ![description](url). ' +
-      'Use direct links from Wikimedia Commons, Unsplash or other open sources.';
+        'Use direct links from Wikimedia Commons, Unsplash or other open sources.';
     }
 
     let selectedTextInstruction = '';
     if (selectedText && selectedText.trim()) {
-      selectedTextInstruction = '\n\nSELECTED TEXT (user highlighted this in the document):\n' +
-      '```markdown\n' + selectedText + '\n```\n\n' +
-      'Consider this text in your response.';
+      selectedTextInstruction = '\n\nSELECTED TEXT (user highlighted this text to replace/improve):\n' +
+        '```markdown\n' + selectedText + '\n```\n\n' +
+        'Your task is to REPLACE this selected text with improved content based on the user request. ' +
+        'Return ONLY the final text that should replace it. Do not wrap it in quotes or markdown code blocks unless it is part of the content itself.';
     }
 
     const systemPrompt = 'You are an expert technical documentation writer.\n\n' +
-    'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
-    'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
-    'TASK: Generate ' + genTypeText + ' for the current section based on the user request. ' +
-    'Strictly follow the document style. Respond ONLY with text.' +
-    selectedTextInstruction + imageInstruction;
+      'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
+      'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
+      'TASK: Generate ' + genTypeText + ' based on the user request. ' +
+      'Strictly follow the document style. Respond ONLY with text.' +
+      selectedTextInstruction + imageInstruction;
 
     const fullPrompt = systemPrompt + "\n\nREQUEST: " + userMessage;
-    const aiResponse = callGemini(fullPrompt, maxTokens);
+    const aiResponse = callAI(fullPrompt, maxTokens);
     return { success: true, response: aiResponse };
   } catch (e) {
     return { success: false, error: e.toString() };
@@ -1791,12 +1803,12 @@ function sendChatMessageWithImage(userMessage, imageBase64, imageName, genType, 
     const currentSection = getCurrentSectionMarkdown();
     const docStyles = getDocumentStyleGuide();
     const selectedText = getSelectedText();
-    
+
     let genTypeText = '', maxTokens = 8192;
     if (genType === 'full') { genTypeText = 'full text'; maxTokens = 8192; }
     else if (genType === 'paragraph') { genTypeText = 'one paragraph'; maxTokens = 1024; }
     else if (genType === 'sentence') { genTypeText = '1-2 sentences'; maxTokens = 256; }
-    
+
     let imageInstruction = '';
     if (withImages) {
       imageInstruction = '\n\nIMPORTANT: Include 1-2 relevant images in format ![description](url).';
@@ -1804,54 +1816,135 @@ function sendChatMessageWithImage(userMessage, imageBase64, imageName, genType, 
 
     let selectedTextInstruction = '';
     if (selectedText && selectedText.trim()) {
-      selectedTextInstruction = '\n\nSELECTED TEXT:\n```markdown\n' + selectedText + '\n```';
+      selectedTextInstruction = '\n\nSELECTED TEXT:\n```markdown\n' + selectedText + '\n```\n\n' +
+        'Your task is to REPLACE this selected text.';
     }
 
     const systemPrompt = 'You are an expert technical documentation writer with vision capabilities.\n\n' +
-    'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
-    'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
-    'TASK: User uploaded image "' + imageName + '" and requests: "' + userMessage + '"\n' +
-    'Generate ' + genTypeText + ' for the current section.' +
-    selectedTextInstruction + imageInstruction;
+      'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
+      'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
+      'TASK: User uploaded image "' + imageName + '" and requests: "' + userMessage + '"\n' +
+      'Generate ' + genTypeText + ' for the current section. Respond ONLY with text.' +
+      selectedTextInstruction + imageInstruction;
 
-    const aiResponse = callGeminiWithImage(systemPrompt, imageBase64, maxTokens);
+    const aiResponse = callAIWithImage(systemPrompt, imageBase64, maxTokens);
     return { success: true, response: aiResponse };
   } catch (e) {
     return { success: false, error: e.toString() };
   }
 }
 
+/* Universal AI Provider call (OpenAI format) */
+function callAI(prompt, maxTokens = 8192) {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('AI_API_KEY');
+  const modelName = props.getProperty('AI_MODEL_NAME') || DEFAULT_MODEL;
+  const baseUrl = props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL;
+
+  if (!apiKey) throw new Error("API Key not found! Please configure in Settings → API Settings.");
+
+  const url = baseUrl + '/chat/completions';
+  const authType = baseUrl.includes('yandex') ? 'Api-Key' : 'Bearer';
+
+  const payload = {
+    model: modelName,
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.4,
+    max_tokens: maxTokens
+  };
+
+  const response = UrlFetchApp.fetch(url, {
+    method: "post",
+    headers: {
+      'Authorization': authType + ' ' + apiKey,
+      'Content-Type': 'application/json'
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  const json = JSON.parse(response.getContentText());
+  if (json.error) throw new Error("API Error: " + json.error.message);
+  if (!json.choices || !json.choices[0] || !json.choices[0].message) {
+    throw new Error("Empty response from AI provider");
+  }
+  return json.choices[0].message.content;
+}
+
+function callAIWithImage(prompt, imageBase64, maxTokens = 8192) {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('AI_API_KEY');
+  const modelName = props.getProperty('AI_MODEL_NAME') || DEFAULT_MODEL;
+  const baseUrl = props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL;
+
+  if (!apiKey) throw new Error("API Key not found! Please configure in Settings → API Settings.");
+
+  const url = baseUrl + '/chat/completions';
+  const authType = baseUrl.includes('yandex') ? 'Api-Key' : 'Bearer';
+
+  const payload = {
+    model: modelName,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        { type: "image_url", image_url: { url: "data:image/png;base64," + imageBase64 } }
+      ]
+    }],
+    temperature: 0.4,
+    max_tokens: maxTokens
+  };
+
+  const response = UrlFetchApp.fetch(url, {
+    method: "post",
+    headers: {
+      'Authorization': authType + ' ' + apiKey,
+      'Content-Type': 'application/json'
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  const json = JSON.parse(response.getContentText());
+  if (json.error) throw new Error("API Error: " + json.error.message);
+  if (!json.choices || !json.choices[0] || !json.choices[0].message) {
+    throw new Error("Empty response from AI provider");
+  }
+  return json.choices[0].message.content;
+}
+
+/* ---------- DOCUMENT HELPERS ---------- */
 function getCurrentSectionMarkdown() {
   const doc = DocumentApp.getActiveDocument();
   const body = doc.getBody();
   const cursor = doc.getCursor();
-  
+
   if (!cursor) return getDocumentAsMarkdown();
-  
+
   const element = cursor.getElement();
   let currentElement = element;
-  while (currentElement.getParent() && 
-         currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
+  while (currentElement.getParent() &&
+    currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
     currentElement = currentElement.getParent();
   }
   const currentIndex = body.getChildIndex(currentElement);
-  
+
   let sectionStart = 0, sectionHeading = '';
   for (let i = currentIndex; i >= 0; i--) {
     const child = body.getChild(i);
     if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
       const p = child.asParagraph();
       const heading = p.getHeading();
-      if (heading === DocumentApp.ParagraphHeading.HEADING1 || 
-          heading === DocumentApp.ParagraphHeading.HEADING2 || 
-          heading === DocumentApp.ParagraphHeading.HEADING3) {
+      if (heading === DocumentApp.ParagraphHeading.HEADING1 ||
+        heading === DocumentApp.ParagraphHeading.HEADING2 ||
+        heading === DocumentApp.ParagraphHeading.HEADING3) {
         sectionStart = i;
         sectionHeading = p.getText();
         break;
       }
     }
   }
-  
+
   let sectionEnd = body.getNumChildren();
   let currentHeadingLevel = 0;
   if (sectionHeading) {
@@ -1861,7 +1954,7 @@ function getCurrentSectionMarkdown() {
     else if (startHeading === DocumentApp.ParagraphHeading.HEADING2) currentHeadingLevel = 2;
     else if (startHeading === DocumentApp.ParagraphHeading.HEADING3) currentHeadingLevel = 3;
   }
-  
+
   for (let i = currentIndex + 1; i < body.getNumChildren(); i++) {
     const child = body.getChild(i);
     if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
@@ -1876,10 +1969,10 @@ function getCurrentSectionMarkdown() {
       }
     }
   }
-  
+
   let markdown = '';
   if (sectionHeading) markdown += '# ' + sectionHeading + '\n\n';
-  
+
   for (let i = sectionStart + 1; i < sectionEnd && i < body.getNumChildren(); i++) {
     const child = body.getChild(i);
     const type = child.getType();
@@ -1897,7 +1990,7 @@ function getDocumentStyleGuide() {
   const doc = DocumentApp.getActiveDocument();
   const body = doc.getBody();
   let styles = { headings: [], hasBullets: false, hasNumbers: false };
-  
+
   for (let i = 0; i < body.getNumChildren(); i++) {
     const child = body.getChild(i);
     const type = child.getType();
@@ -1912,7 +2005,7 @@ function getDocumentStyleGuide() {
       else styles.hasNumbers = true;
     }
   }
-  
+
   let styleGuide = 'Document Structure:\n';
   styles.headings.slice(0, 10).forEach(h => {
     styleGuide += '#'.repeat(h.level) + ' ' + h.text + '\n';
@@ -1924,74 +2017,15 @@ function getDocumentStyleGuide() {
   return styleGuide;
 }
 
-function callGemini(prompt, maxTokens = 8192) {
-  const props = PropertiesService.getScriptProperties();
-  const apiKey = props.getProperty('GEMINI_API_KEY');
-  const modelName = props.getProperty('AI_MODEL_NAME') || GEMINI_MODEL;
-  const baseUrl = props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL;
-  
-  if (!apiKey) throw new Error("API key not found! Click ⚙️ Параметры → Настройки API to configure.");
-
-  const url = baseUrl + modelName + ':generateContent?key=' + apiKey;
-  const payload = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens }
-  };
-
-  const response = UrlFetchApp.fetch(url, {
-    method: "post", contentType: "application/json",
-    payload: JSON.stringify(payload), muteHttpExceptions: true
-  });
-
-  const json = JSON.parse(response.getContentText());
-  if (json.error) throw new Error("Gemini API Error: " + json.error.message);
-  if (!json.candidates || !json.candidates[0] || !json.candidates[0].content) {
-    throw new Error("Empty response from Gemini");
-  }
-  return json.candidates[0].content.parts[0].text;
-}
-
-function callGeminiWithImage(prompt, imageBase64, maxTokens = 8192) {
-  const props = PropertiesService.getScriptProperties();
-  const apiKey = props.getProperty('GEMINI_API_KEY');
-  const modelName = props.getProperty('AI_MODEL_NAME') || GEMINI_MODEL;
-  const baseUrl = props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL;
-  
-  if (!apiKey) throw new Error("API key not found! Click ⚙️ Параметры → Настройки API to configure.");
-
-  const url = baseUrl + modelName + ':generateContent?key=' + apiKey;
-  const payload = {
-    contents: [{
-      parts: [
-        { text: prompt },
-        { inlineData: { mimeType: 'image/png', data: imageBase64 } }
-      ]
-    }],
-    generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens }
-  };
-
-  const response = UrlFetchApp.fetch(url, {
-    method: "post", contentType: "application/json",
-    payload: JSON.stringify(payload), muteHttpExceptions: true
-  });
-
-  const json = JSON.parse(response.getContentText());
-  if (json.error) throw new Error("Gemini API Error: " + json.error.message);
-  if (!json.candidates || !json.candidates[0] || !json.candidates[0].content) {
-    throw new Error("Empty response from Gemini");
-  }
-  return json.candidates[0].content.parts[0].text;
-}
-
 function getDocumentAsMarkdown() {
   const doc = DocumentApp.getActiveDocument();
   const body = doc.getBody();
   let markdown = "";
-  
+
   for (let i = 0; i < body.getNumChildren(); i++) {
     const child = body.getChild(i);
     const type = child.getType();
-    
+
     if (type === DocumentApp.ElementType.PARAGRAPH) {
       const p = child.asParagraph();
       const text = p.getText().trim();
@@ -2013,9 +2047,23 @@ function getDocumentAsMarkdown() {
   return markdown || "Document is empty.";
 }
 
+/* ---------- INSERT & REPLACE ---------- */
 function insertMarkdownToDocument(markdown) {
   try {
     const doc = DocumentApp.getActiveDocument();
+    const selection = doc.getSelection();
+
+    // Step 1: If there is a selection, delete it completely (to replace it)
+    if (selection) {
+      try {
+        selection.delete();
+      } catch (e) {
+        // Fallback if selection.delete fails (e.g. complex ranges)
+        // Just proceed, we'll insert at cursor
+      }
+    }
+
+    // Step 2: Insert markdown at the current cursor position
     const result = insertMarkdownAtCursor(doc, markdown);
     if (result.success) return { success: true, message: 'Text inserted successfully!' };
     else return { success: false, message: result.error };
@@ -2030,7 +2078,7 @@ function insertMarkdownAtCursor(doc, markdown) {
     if (!doc) return { success: false, error: 'Document not found' };
     const body = doc.getBody();
     if (!body) return { success: false, error: 'Document body not found' };
-    
+
     const lines = markdown.split('\n');
     const cursor = doc.getCursor();
     let insertIndex = 0;
@@ -2039,12 +2087,12 @@ function insertMarkdownAtCursor(doc, markdown) {
     if (cursor) {
       const element = cursor.getElement();
       let currentElement = element;
-      while (currentElement.getParent() && 
-             currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
+      while (currentElement.getParent() &&
+        currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
         currentElement = currentElement.getParent();
       }
       insertIndex = body.getChildIndex(currentElement);
-      
+
       if (element.getType() === DocumentApp.ElementType.TEXT) {
         const offset = cursor.getOffset();
         const fullText = element.asText().getText();
@@ -2127,7 +2175,7 @@ function insertImageFromUrl(body, index, imageUrl, altText) {
       muteHttpExceptions: true, followRedirects: true,
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
     });
-    
+
     if (response.getResponseCode() !== 200) {
       body.insertParagraph(index, '[Failed to load image]');
       return index + 1;
@@ -2142,11 +2190,11 @@ function insertImageFromUrl(body, index, imageUrl, altText) {
     const mimeType = getMimeTypeFromUrl(imageUrl);
     const imageBlob = Utilities.newBlob(bytes, mimeType, altText || 'image');
     const image = body.insertImage(index, imageBlob);
-    
+
     if (altText) {
-      try { image.setAltDescription(altText); image.setAltTitle(altText); } catch (e) {}
+      try { image.setAltDescription(altText); image.setAltTitle(altText); } catch (e) { }
     }
-    
+
     try {
       const originalWidth = image.getWidth();
       const originalHeight = image.getHeight();
@@ -2156,8 +2204,8 @@ function insertImageFromUrl(body, index, imageUrl, altText) {
         image.setWidth(maxWidth);
         image.setHeight(Math.round(originalHeight * ratio));
       }
-    } catch (e) {}
-    
+    } catch (e) { }
+
     return index + 1;
   } catch (e) {
     Logger.log('Critical error loading image: ' + e.toString());
@@ -2169,14 +2217,14 @@ function insertImageFromUrl(body, index, imageUrl, altText) {
 function applyInlineFormatting(paragraph) {
   let text = paragraph.getText();
   const textObj = paragraph.editAsText();
-  
+
   const boldRegex = /\*\*(.+?)\*\*/g;
   let match;
   const boldRanges = [];
   while ((match = boldRegex.exec(text)) !== null) {
     boldRanges.push({ start: match.index, end: match.index + match[0].length, content: match[1] });
   }
-  
+
   let processedText = text;
   let offset = 0;
   for (let i = boldRanges.length - 1; i >= 0; i--) {
@@ -2187,14 +2235,14 @@ function applyInlineFormatting(paragraph) {
     textObj.setBold(startPos, endPos, true);
     offset += (range.end - range.start) - range.content.length;
   }
-  
+
   text = processedText;
   const italicRegex = /\*([^*]+?)\*/g;
   const italicRanges = [];
   while ((match = italicRegex.exec(text)) !== null) {
     italicRanges.push({ start: match.index, end: match.index + match[0].length, content: match[1] });
   }
-  
+
   processedText = text;
   offset = 0;
   for (let i = italicRanges.length - 1; i >= 0; i--) {
@@ -2205,6 +2253,6 @@ function applyInlineFormatting(paragraph) {
     textObj.setItalic(startPos, endPos, true);
     offset += (range.end - range.start) - range.content.length;
   }
-  
+
   paragraph.setText(processedText);
 }
