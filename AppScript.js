@@ -1,20 +1,12 @@
 /* 
   Set up 3 env variables:
-  1) Extensions -> AppScripts
+  1) Extensions -> AppsScript
   2) Project Settings tab (with the gear icon)
   3) Script Properties -> Edit script properties
   4) Add next properties
     - AI_API_KEY (e.g. YOUR_API_KEY)
     - AI_BASE_URL (e.g. https://ai.api.cloud.yandex.net/v1)
     - AI_MODEL_NAME (e.g. gpt://b1gd47capubi1hd3o34p/deepseek-v4-flash/latest)
-*/
-
-/* 
-  Google Apps Script - AI Assistant 
-  Universal Provider Support (OpenAI-compatible format)
-  Fully English UI.
-  Replaces selected text.
-  Applies document styles.
 */
 
 const DEFAULT_MODEL = "gemini-2.0-flash";
@@ -24,7 +16,7 @@ function onOpen() {
   try {
     const ui = DocumentApp.getUi();
 
-    const helperMenu = ui.createMenu('AI Assistant')
+    const helperMenu = ui.createMenu('GDocs any AI')
       .addItem('Open Chat Sidebar', 'showSidebar')
       .addSeparator()
       .addSubMenu(
@@ -39,12 +31,13 @@ function onOpen() {
   }
 }
 
-function saveSettings(apiKey, modelName, baseUrl) {
+function saveSettings(apiKey, modelName, baseUrl, useFullContext) {
   try {
     const props = PropertiesService.getScriptProperties();
     if (apiKey && apiKey.trim()) props.setProperty('AI_API_KEY', apiKey.trim());
     if (modelName && modelName.trim()) props.setProperty('AI_MODEL_NAME', modelName.trim());
     if (baseUrl && baseUrl.trim()) props.setProperty('AI_BASE_URL', baseUrl.trim());
+    props.setProperty('AI_USE_FULL_CONTEXT', useFullContext ? 'true' : 'false');
     return { success: true, message: 'Settings saved successfully!' };
   } catch (e) {
     return { success: false, error: e.toString() };
@@ -58,7 +51,8 @@ function getSettings() {
       success: true,
       apiKey: props.getProperty('AI_API_KEY') || '',
       modelName: props.getProperty('AI_MODEL_NAME') || DEFAULT_MODEL,
-      baseUrl: props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL
+      baseUrl: props.getProperty('AI_BASE_URL') || DEFAULT_BASE_URL,
+      useFullContext: props.getProperty('AI_USE_FULL_CONTEXT') === 'true'
     };
   } catch (e) {
     return { success: false, error: e.toString() };
@@ -74,7 +68,6 @@ function testConnection() {
 
     if (!apiKey) return { success: false, error: 'API Key missing. Please save your settings.' };
 
-    // Standard OpenAI-compatible test payload
     const payload = {
       model: modelName,
       messages: [
@@ -327,14 +320,14 @@ function showSidebar() {
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
-      font-size: 13px; /* Increased base size */
+      font-size: 13px;
     }
 
     .top-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 6px 8px;
+      padding: 8px 12px;
       background-color: var(--bg-color);
       border-bottom: 1px solid var(--border-color);
       flex-shrink: 0;
@@ -342,18 +335,20 @@ function showSidebar() {
     }
 
     .top-bar-title {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-secondary);
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-color);
+      padding: 4px 0;
     }
 
     .top-bar-title svg {
-      width: 14px;
-      height: 14px;
-      fill: var(--accent-color);
+      width: 28px;
+      height: 28px;
+      fill: #4E3EFF; /* Unidoka icon color */
+      filter: drop-shadow(0 1px 2px rgba(78, 62, 255, 0.2));
     }
 
     .params-btn {
@@ -558,6 +553,25 @@ function showSidebar() {
       background-color: var(--border-color);
       margin: 2px 0;
     }
+
+    /* New context toggle */
+    .toggle-row-context {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background-color: var(--bg-color);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      user-select: none;
+    }
+    .toggle-row-context:hover { background-color: var(--elevated-color); }
+    .toggle-row-context.active .toggle-switch { background-color: var(--accent-color); }
+    .toggle-row-context.active .toggle-switch::after { left: 16px; background-color: #202124; }
+    .toggle-row-context .toggle-switch { position: relative; width: 32px; height: 18px; background-color: var(--elevated-color); border-radius: 10px; transition: background-color 0.2s; flex-shrink: 0; }
+    .toggle-row-context .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background-color: var(--text-secondary); border-radius: 50%; transition: all 0.2s ease; }
+    .toggle-row-context input { display: none; }
 
     .api-settings-btn {
       display: flex;
@@ -898,12 +912,12 @@ function showSidebar() {
     }
 
     .message {
-      padding: 8px 12px; /* Increased padding */
+      padding: 8px 12px;
       border-radius: 8px;
-      max-width: 90%; /* Increased width */
+      max-width: 90%;
       word-wrap: break-word;
       line-height: 1.5;
-      font-size: 13px; /* Larger message text */
+      font-size: 13px;
       animation: slideIn 0.2s ease;
     }
 
@@ -930,12 +944,12 @@ function showSidebar() {
 
     .insert-btn {
       margin-top: 6px;
-      padding: 6px 16px; /* Made bigger */
+      padding: 6px 16px;
       background-color: var(--accent-color);
       color: #202124;
       border: none;
       border-radius: 6px;
-      font-size: 12px; /* Larger button text */
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       transition: background-color 0.2s, transform 0.1s;
@@ -1129,6 +1143,13 @@ function showSidebar() {
       padding: 2px 0 0 0;
       opacity: 0.8;
     }
+    .footer-note-images {
+      font-size: 9px;
+      color: var(--text-secondary);
+      opacity: 0.7;
+      text-align: center;
+      margin-top: 2px;
+    }
 
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -1140,8 +1161,19 @@ function showSidebar() {
 
   <div class="top-bar">
     <div class="top-bar-title">
-      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-      <span>AI Assistant</span>
+      <!-- Unidoka SVG Icon -->
+      <svg width="28" height="28" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M25 27.75C26.5188 27.75 27.75 26.5188 27.75 25C27.75 23.4812 26.5188 22.25 25 22.25C23.4812 22.25 22.25 23.4812 22.25 25C22.25 26.5188 23.4812 27.75 25 27.75Z" fill="#4E3EFF"/>
+        <path d="M26.375 9.5C26.375 8.74061 25.7594 8.125 25 8.125C24.2406 8.125 23.625 8.74061 23.625 9.5V18.625C23.625 19.3844 24.2406 20 25 20C25.7594 20 26.375 19.3844 26.375 18.625V9.5Z" fill="#4E3EFF"/>
+        <path d="M43.2632 26.375C44.2224 26.375 45 25.7594 45 25C45 24.2406 44.2224 23.625 43.2632 23.625H31.7368C30.7776 23.625 30 24.2406 30 25C30 25.7594 30.7776 26.375 31.7368 26.375H43.2632Z" fill="#4E3EFF"/>
+        <path d="M23.625 40.5C23.625 41.2594 24.2406 41.875 25 41.875C25.7594 41.875 26.375 41.2594 26.375 40.5V31.375C26.375 30.6156 25.7594 30 25 30C24.2406 30 23.625 30.6156 23.625 31.375V40.5Z" fill="#4E3EFF"/>
+        <path d="M6.73684 23.625C5.77761 23.625 5 24.2406 5 25C5 25.7594 5.77761 26.375 6.73684 26.375L18.2632 26.375C19.2224 26.375 20 25.7594 20 25C20 24.2406 19.2224 23.625 18.2632 23.625L6.73684 23.625Z" fill="#4E3EFF"/>
+        <path d="M36.9322 15.0125C37.4692 14.4755 37.4692 13.6049 36.9322 13.068C36.3953 12.531 35.5247 12.531 34.9877 13.068L28.5353 19.5203C27.9984 20.0573 27.9984 20.9279 28.5353 21.4649C29.0723 22.0018 29.9429 22.0018 30.4799 21.4649L36.9322 15.0125Z" fill="#4E3EFF"/>
+        <path d="M34.988 36.9322C35.5249 37.4692 36.3955 37.4692 36.9325 36.9322C37.4695 36.3953 37.4695 35.5247 36.9325 34.9877L30.4802 28.5353C29.9432 27.9984 29.0726 27.9984 28.5356 28.5353C27.9986 29.0723 27.9986 29.9429 28.5356 30.4799L34.988 36.9322Z" fill="#4E3EFF"/>
+        <path d="M13.0678 34.9875C12.5308 35.5245 12.5308 36.3951 13.0678 36.932C13.6047 37.469 14.4753 37.469 15.0123 36.932L21.4647 30.4797C22.0016 29.9427 22.0016 29.0721 21.4647 28.5351C20.9277 27.9982 20.0571 27.9982 19.5201 28.5351L13.0678 34.9875Z" fill="#4E3EFF"/>
+        <path d="M15.012 13.0678C14.4751 12.5308 13.6045 12.5308 13.0675 13.0678C12.5305 13.6047 12.5305 14.4753 13.0675 15.0123L19.5198 21.4647C20.0568 22.0016 20.9274 22.0016 21.4644 21.4647C22.0014 20.9277 22.0014 20.0571 21.4644 19.5201L15.012 13.0678Z" fill="#4E3EFF"/>
+      </svg>
+      <span>GDocs any AI</span>
     </div>
     
     <button class="params-btn" id="paramsBtn" onclick="toggleDropdown(event)">
@@ -1174,6 +1206,23 @@ function showSidebar() {
             </div>
             <div class="toggle-switch"></div>
           </label>
+          <div class="footer-note-images" style="margin-top: -4px;">* Not supported by all AI models (vision models only).</div>
+        </div>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            Context
+          </div>
+          <label class="toggle-row-context" id="contextToggle">
+            <input type="checkbox" id="useFullContext">
+            <div class="toggle-info">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              <span>Include full document context</span>
+            </div>
+            <div class="toggle-switch"></div>
+          </label>
+          <div class="footer-note-images" style="margin-top: -4px;">* Copies entire doc as MD (heavy token usage). Off by default.</div>
         </div>
         
         <div class="dropdown-divider"></div>
@@ -1361,6 +1410,14 @@ function showSidebar() {
         if (settings.success && settings.apiKey) {
           updateApiStatusIndicator(true);
         }
+        
+        // Restore context toggle state
+        if (settings.success && settings.useFullContext) {
+          const contextToggle = document.getElementById('contextToggle');
+          const checkbox = document.getElementById('useFullContext');
+          checkbox.checked = true;
+          contextToggle.classList.add('active');
+        }
       })
       .getSettings();
     
@@ -1377,6 +1434,19 @@ function showSidebar() {
         } else {
           imageToggle.classList.remove('active');
           modeIndicator.classList.remove('visible');
+        }
+      }, 0);
+    });
+
+    const contextToggle = document.getElementById('contextToggle');
+    const contextCheckbox = document.getElementById('useFullContext');
+    contextToggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      setTimeout(() => {
+        if (contextCheckbox.checked) {
+          contextToggle.classList.add('active');
+        } else {
+          contextToggle.classList.remove('active');
         }
       }, 0);
     });
@@ -1440,6 +1510,7 @@ function showSidebar() {
       const apiKey = document.getElementById('settingsApiKey').value.trim();
       const modelName = document.getElementById('settingsModelName').value.trim();
       const baseUrl = document.getElementById('settingsBaseUrl').value.trim();
+      const useFullContext = document.getElementById('useFullContext').checked;
       
       const saveBtn = document.getElementById('saveBtn');
       saveBtn.disabled = true;
@@ -1468,7 +1539,7 @@ function showSidebar() {
           status.className = 'status-message visible error';
           status.innerText = 'Error: ' + err.message;
         })
-        .saveSettings(apiKey, modelName, baseUrl);
+        .saveSettings(apiKey, modelName, baseUrl, useFullContext);
     }
 
     function testApiConnection() {
@@ -1649,8 +1720,8 @@ function showSidebar() {
     `;
 
     const html = HtmlService.createHtmlOutput(htmlContent)
-      .setTitle('AI Documentation Assistant')
-      .setWidth(480) // Increased width
+      .setTitle('GDocs any AI')
+      .setWidth(480)
       .setHeight(800);
     DocumentApp.getUi().showSidebar(html);
   } catch (e) {
@@ -1670,6 +1741,7 @@ function getSelectedText() {
 
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i].getElement();
+
       if (element.getType() === DocumentApp.ElementType.TEXT) {
         const textElement = element.asText();
         const startOffset = elements[i].getStartOffset();
@@ -1681,8 +1753,14 @@ function getSelectedText() {
         }
       } else if (element.getType() === DocumentApp.ElementType.PARAGRAPH) {
         selectedText += element.asParagraph().getText();
+      } else if (element.getType() === DocumentApp.ElementType.LIST_ITEM) {
+        selectedText += element.asListItem().getText();
       }
-      if (i < elements.length - 1) selectedText += '\n';
+
+      // Add newline between elements if not the last one
+      if (i < elements.length - 1) {
+        selectedText += '\n';
+      }
     }
     return selectedText.trim();
   } catch (e) {
@@ -1711,9 +1789,16 @@ function sendChatMessage(userMessage, withImages) {
         'Return ONLY the final text that should replace it. Do not wrap it in quotes or markdown code blocks unless it is part of the content itself.';
     }
 
+    let fullDocContext = '';
+    const settings = getSettings();
+    if (settings.success && settings.useFullContext) {
+      fullDocContext = '\n\nFULL DOCUMENT CONTEXT (for reference, exclude images):\n```markdown\n' + getDocumentAsMarkdown() + '\n```\n\n';
+    }
+
     const systemPrompt = 'You are an expert technical documentation writer.\n\n' +
       'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
       'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
+      fullDocContext +
       'TASK: Generate full text (multiple paragraphs, subheadings, lists if needed) based on the user request. ' +
       'Strictly follow the document style. Respond ONLY with text.' +
       selectedTextInstruction + imageInstruction;
@@ -1743,9 +1828,16 @@ function sendChatMessageWithImage(userMessage, imageBase64, imageName, withImage
         'Your task is to REPLACE this selected text.';
     }
 
+    let fullDocContext = '';
+    const settings = getSettings();
+    if (settings.success && settings.useFullContext) {
+      fullDocContext = '\n\nFULL DOCUMENT CONTEXT (for reference, exclude images):\n```markdown\n' + getDocumentAsMarkdown() + '\n```\n\n';
+    }
+
     const systemPrompt = 'You are an expert technical documentation writer with vision capabilities.\n\n' +
       'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
       'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
+      fullDocContext +
       'TASK: User uploaded image "' + imageName + '" and requests: "' + userMessage + '"\n' +
       'Generate full text for the current section. Respond ONLY with text.' +
       selectedTextInstruction + imageInstruction;
@@ -1976,18 +2068,33 @@ function insertMarkdownToDocument(markdown) {
     const doc = DocumentApp.getActiveDocument();
     const selection = doc.getSelection();
 
-    // Step 1: If there is a selection, delete it completely (to replace it)
+    // Step 1: Find cursor position BEFORE deleting anything
+    let cursorPos = null;
+    let cursorElement = null;
+    let cursorOffset = null;
+    let cursorElementParent = null;
+
+    const cursor = doc.getCursor();
+    if (cursor) {
+      cursorPos = cursor;
+      cursorElement = cursor.getElement();
+      cursorOffset = cursor.getOffset();
+      if (cursorElement) {
+        cursorElementParent = cursorElement.getParent();
+      }
+    }
+
+    // Step 2: If there is a selection, delete it completely (to replace it)
     if (selection) {
       try {
         selection.delete();
       } catch (e) {
-        // Fallback if selection.delete fails (e.g. complex ranges)
-        // Just proceed, we'll insert at cursor
+        // Fallback if selection.delete fails
       }
     }
 
-    // Step 2: Insert markdown at the current cursor position
-    const result = insertMarkdownAtCursor(doc, markdown);
+    // Step 3: Insert markdown at the saved cursor position
+    const result = insertMarkdownAtCursor(doc, markdown, cursorPos, cursorElement, cursorOffset, cursorElementParent);
     if (result.success) return { success: true, message: 'Text inserted successfully!' };
     else return { success: false, message: result.error };
   } catch (e) {
@@ -1995,49 +2102,7 @@ function insertMarkdownToDocument(markdown) {
   }
 }
 
-/* Apply standard document styles (Times New Roman, 14, 1.5 spacing, etc) to a paragraph */
-function applyDocumentStyleToParagraph(para, heading) {
-  if (heading === DocumentApp.ParagraphHeading.NORMAL) {
-    para.setFontFamily('Times New Roman');
-    para.setFontSize(14);
-    para.setLineSpacing(1.5);
-    para.setSpacingAfter(0);
-    para.setSpacingBefore(0);
-    para.setIndentFirstLine(1.25 * 28.3465);
-  }
-  else if (heading === DocumentApp.ParagraphHeading.HEADING1) {
-    para.setFontFamily('Times New Roman');
-    para.setFontSize(14);
-    para.setBold(true);
-    para.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    para.setLineSpacing(1.5);
-    para.setSpacingBefore(12);
-    para.setSpacingAfter(12);
-    para.setIndentFirstLine(0);
-  }
-  else if (heading === DocumentApp.ParagraphHeading.HEADING2) {
-    para.setFontFamily('Times New Roman');
-    para.setFontSize(14);
-    para.setBold(true);
-    para.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
-    para.setLineSpacing(1.5);
-    para.setSpacingBefore(8);
-    para.setSpacingAfter(8);
-    para.setIndentFirstLine(0);
-  }
-  else if (heading === DocumentApp.ParagraphHeading.HEADING3) {
-    para.setFontFamily('Times New Roman');
-    para.setFontSize(14);
-    para.setBold(true);
-    para.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
-    para.setLineSpacing(1.5);
-    para.setSpacingBefore(6);
-    para.setSpacingAfter(6);
-    para.setIndentFirstLine(0);
-  }
-}
-
-function insertMarkdownAtCursor(doc, markdown) {
+function insertMarkdownAtCursor(doc, markdown, cursorPos, cursorElement, cursorOffset, cursorElementParent) {
   try {
     if (!markdown || typeof markdown !== 'string') return { success: false, error: 'Text is empty or invalid' };
     if (!doc) return { success: false, error: 'Document not found' };
@@ -2045,30 +2110,30 @@ function insertMarkdownAtCursor(doc, markdown) {
     if (!body) return { success: false, error: 'Document body not found' };
 
     const lines = markdown.split('\n');
-    const cursor = doc.getCursor();
     let insertIndex = 0;
     let insertAfterCurrentParagraph = false;
 
-    if (cursor) {
-      const element = cursor.getElement();
-      let currentElement = element;
+    // Determine insert index based on original cursor position
+    if (cursorPos && cursorElement) {
+      // Find the actual index of the parent element in the body
+      let currentElement = cursorElement;
       while (currentElement.getParent() &&
         currentElement.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
         currentElement = currentElement.getParent();
       }
       insertIndex = body.getChildIndex(currentElement);
 
-      if (element.getType() === DocumentApp.ElementType.TEXT) {
-        const offset = cursor.getOffset();
-        const fullText = element.asText().getText();
-        if (offset > 0 && offset < fullText.length) {
-          const before = fullText.substring(0, offset);
-          const after = fullText.substring(offset);
-          element.asText().setText(before);
+      // If cursor is inside a text element and not at the start/end, split the text
+      if (cursorElement.getType() === DocumentApp.ElementType.TEXT) {
+        const fullText = cursorElement.asText().getText();
+        if (cursorOffset > 0 && cursorOffset < fullText.length) {
+          const before = fullText.substring(0, cursorOffset);
+          const after = fullText.substring(cursorOffset);
+          cursorElement.asText().setText(before);
           body.insertParagraph(insertIndex + 1, after);
           insertIndex++;
           insertAfterCurrentParagraph = true;
-        } else if (offset === fullText.length) {
+        } else if (cursorOffset === fullText.length) {
           insertAfterCurrentParagraph = true;
         }
       } else {
@@ -2130,6 +2195,48 @@ function insertMarkdownAtCursor(doc, markdown) {
   } catch (e) {
     Logger.log('Error in insertMarkdownAtCursor: ' + e.toString());
     return { success: false, error: e.toString() };
+  }
+}
+
+/* Apply standard document styles (Times New Roman, 14, 1.5 spacing, etc) to a paragraph */
+function applyDocumentStyleToParagraph(para, heading) {
+  if (heading === DocumentApp.ParagraphHeading.NORMAL) {
+    para.setFontFamily('Times New Roman');
+    para.setFontSize(14);
+    para.setLineSpacing(1.5);
+    para.setSpacingAfter(0);
+    para.setSpacingBefore(0);
+    para.setIndentFirstLine(1.25 * 28.3465);
+  }
+  else if (heading === DocumentApp.ParagraphHeading.HEADING1) {
+    para.setFontFamily('Times New Roman');
+    para.setFontSize(14);
+    para.setBold(true);
+    para.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    para.setLineSpacing(1.5);
+    para.setSpacingBefore(12);
+    para.setSpacingAfter(12);
+    para.setIndentFirstLine(0);
+  }
+  else if (heading === DocumentApp.ParagraphHeading.HEADING2) {
+    para.setFontFamily('Times New Roman');
+    para.setFontSize(14);
+    para.setBold(true);
+    para.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
+    para.setLineSpacing(1.5);
+    para.setSpacingBefore(8);
+    para.setSpacingAfter(8);
+    para.setIndentFirstLine(0);
+  }
+  else if (heading === DocumentApp.ParagraphHeading.HEADING3) {
+    para.setFontFamily('Times New Roman');
+    para.setFontSize(14);
+    para.setBold(true);
+    para.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
+    para.setLineSpacing(1.5);
+    para.setSpacingBefore(6);
+    para.setSpacingAfter(6);
+    para.setIndentFirstLine(0);
   }
 }
 
