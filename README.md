@@ -1,4 +1,4 @@
-# GDocs any AI
+# Unidoka's GDocs any AI
 
 GDocs any AI is a Google Docs assistant that integrates any OpenAI-compatible large language model directly into your document editor. You can generate content, rewrite highlighted text, or insert new text exactly at your cursor position. It supports vision models (images) and can optionally use your entire document as context for more accurate responses.
 
