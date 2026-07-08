@@ -9,6 +9,14 @@
     - AI_MODEL_NAME (e.g. gpt://b1gd47capubi1hd3o34p/deepseek-v4-flash/latest)
 */
 
+/* 
+  Google Apps Script - AI Assistant 
+  Universal Provider Support (OpenAI-compatible format)
+  Fully English UI.
+  Replaces selected text.
+  Applies document styles.
+*/
+
 const DEFAULT_MODEL = "gemini-2.0-flash";
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
 
@@ -319,7 +327,7 @@ function showSidebar() {
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
-      font-size: 12px;
+      font-size: 13px; /* Increased base size */
     }
 
     .top-bar {
@@ -476,50 +484,6 @@ function showSidebar() {
       width: 12px;
       height: 12px;
       fill: currentColor;
-    }
-
-    .segmented-control {
-      display: flex;
-      background-color: var(--bg-color);
-      border-radius: 10px;
-      padding: 2px;
-      gap: 2px;
-    }
-
-    .segment {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      padding: 6px 8px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      transition: all 0.2s ease;
-      user-select: none;
-      flex: 1;
-      white-space: nowrap;
-    }
-
-    .segment:hover {
-      background-color: rgba(138, 180, 248, 0.08);
-      color: var(--text-color);
-    }
-
-    .segment.active {
-      background-color: var(--accent-bg);
-      color: var(--accent-color);
-    }
-
-    .segment input { display: none; }
-
-    .segment svg {
-      width: 12px;
-      height: 12px;
-      fill: currentColor;
-      flex-shrink: 0;
     }
 
     .toggle-row {
@@ -934,12 +898,12 @@ function showSidebar() {
     }
 
     .message {
-      padding: 6px 10px;
+      padding: 8px 12px; /* Increased padding */
       border-radius: 8px;
-      max-width: 85%;
+      max-width: 90%; /* Increased width */
       word-wrap: break-word;
-      line-height: 1.4;
-      font-size: 12px;
+      line-height: 1.5;
+      font-size: 13px; /* Larger message text */
       animation: slideIn 0.2s ease;
     }
 
@@ -965,19 +929,21 @@ function showSidebar() {
     }
 
     .insert-btn {
-      margin-top: 4px;
-      padding: 3px 8px;
+      margin-top: 6px;
+      padding: 6px 16px; /* Made bigger */
       background-color: var(--accent-color);
       color: #202124;
       border: none;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 500;
+      border-radius: 6px;
+      font-size: 12px; /* Larger button text */
+      font-weight: 600;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: background-color 0.2s, transform 0.1s;
+      display: inline-block;
     }
 
-    .insert-btn:hover { background-color: var(--accent-hover); }
+    .insert-btn:hover { background-color: var(--accent-hover); transform: scale(1.02); }
+    .insert-btn:active { transform: scale(0.95); }
 
     .loading {
       text-align: center;
@@ -1096,7 +1062,7 @@ function showSidebar() {
       background: transparent;
       border: none;
       color: var(--text-color);
-      font-size: 13px;
+      font-size: 14px;
       outline: none;
       font-family: inherit;
       padding: 2px 0;
@@ -1156,6 +1122,14 @@ function showSidebar() {
 
     input[type="file"] { display: none; }
 
+    .footer-note {
+      text-align: center;
+      font-size: 10px;
+      color: var(--text-secondary);
+      padding: 2px 0 0 0;
+      opacity: 0.8;
+    }
+
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--elevated-color); border-radius: 3px; }
@@ -1187,30 +1161,6 @@ function showSidebar() {
       </div>
       
       <div class="dropdown-body">
-        <div class="setting-item">
-          <div class="setting-label">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-            Response Length
-          </div>
-          <div class="segmented-control">
-            <label class="segment active">
-              <input type="radio" name="genType" value="full" checked>
-              <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-              <span>Full</span>
-            </label>
-            <label class="segment">
-              <input type="radio" name="genType" value="paragraph">
-              <svg viewBox="0 0 24 24"><path d="M14 17H4v2h10v-2zm6-8H4v2h16V9zM4 15h16v-2H4v2zM4 5v2h16V5H4z"/></svg>
-              <span>Paragraph</span>
-            </label>
-            <label class="segment">
-              <input type="radio" name="genType" value="sentence">
-              <svg viewBox="0 0 24 24"><path d="M4 9h16v2H4V9zm0 4h10v2H4v-2z"/></svg>
-              <span>Sentence</span>
-            </label>
-          </div>
-        </div>
-        
         <div class="setting-item">
           <div class="setting-label">
             <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
@@ -1346,6 +1296,7 @@ function showSidebar() {
           <svg viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
         </button>
       </div>
+      <div class="footer-note">* AI-generated content may vary. Review before inserting.</div>
     </div>
   </div>
 
@@ -1412,15 +1363,6 @@ function showSidebar() {
         }
       })
       .getSettings();
-    
-    document.querySelectorAll('.segment').forEach(segment => {
-      segment.addEventListener('click', function(e) {
-        e.stopPropagation();
-        document.querySelectorAll('.segment').forEach(s => s.classList.remove('active'));
-        this.classList.add('active');
-        this.querySelector('input').checked = true;
-      });
-    });
     
     const imageToggle = document.getElementById('imageToggle');
     const withImagesCheckbox = document.getElementById('withImages');
@@ -1603,7 +1545,7 @@ function showSidebar() {
         div.innerText = text;
         const btn = document.createElement('button');
         btn.className = 'insert-btn';
-        btn.innerText = 'Insert';
+        btn.innerText = 'Insert into Document';
         btn.onclick = function() { insertResponse(btn, text); };
         div.appendChild(document.createElement('br'));
         div.appendChild(btn);
@@ -1635,7 +1577,6 @@ function showSidebar() {
       const text = input.value.trim();
       if (!text && !selectedImageBase64) return;
 
-      const genType = document.querySelector('input[name="genType"]:checked').value;
       const withImages = document.getElementById('withImages').checked;
       
       let messageText = text;
@@ -1643,8 +1584,6 @@ function showSidebar() {
         messageText += (text ? '\\n\\n' : '') + '[Image: ' + selectedImageName + ']';
       }
       
-      const genTypeLabels = { 'full': 'Full', 'paragraph': 'Paragraph', 'sentence': 'Sentence' };
-      messageText += ' [' + genTypeLabels[genType] + ']';
       if (withImages) messageText += ' [Images]';
 
       addMessage(messageText, true);
@@ -1674,31 +1613,31 @@ function showSidebar() {
         google.script.run
           .withSuccessHandler(handlerSuccess)
           .withFailureHandler(handlerFailure)
-          .sendChatMessageWithImage(text, imageToSend, imageNameToSend, genType, withImages);
+          .sendChatMessageWithImage(text, imageToSend, imageNameToSend, withImages);
       } else {
         google.script.run
           .withSuccessHandler(handlerSuccess)
           .withFailureHandler(handlerFailure)
-          .sendChatMessage(text, genType, withImages);
+          .sendChatMessage(text, withImages);
       }
     }
 
     function insertResponse(btn, messageText) {
       btn.disabled = true;
-      btn.innerText = '';
+      btn.innerText = 'Inserting...';
       
       google.script.run
         .withSuccessHandler((res) => {
           if (res.success) {
-            btn.innerText = '';
+            btn.innerText = 'Inserted! ✓';
             btn.style.background = 'var(--success-color)';
           } else {
-            btn.innerText = '';
+            btn.innerText = 'Error';
             btn.style.background = 'var(--error-color)';
           }
         })
         .withFailureHandler((err) => {
-          btn.innerText = '';
+          btn.innerText = 'Error';
           btn.style.background = 'var(--error-color)';
           alert("Error: " + err.message);
         })
@@ -1711,7 +1650,8 @@ function showSidebar() {
 
     const html = HtmlService.createHtmlOutput(htmlContent)
       .setTitle('AI Documentation Assistant')
-      .setWidth(400);
+      .setWidth(480) // Increased width
+      .setHeight(800);
     DocumentApp.getUi().showSidebar(html);
   } catch (e) {
     Logger.log('showSidebar() should be launched from Google Docs menu. Error: ' + e.toString());
@@ -1751,23 +1691,11 @@ function getSelectedText() {
   }
 }
 
-function sendChatMessage(userMessage, genType, withImages) {
+function sendChatMessage(userMessage, withImages) {
   try {
     const currentSection = getCurrentSectionMarkdown();
     const docStyles = getDocumentStyleGuide();
     const selectedText = getSelectedText();
-
-    let genTypeText = '', maxTokens = 8192;
-    if (genType === 'full') {
-      genTypeText = 'full text (multiple paragraphs, subheadings, lists if needed)';
-      maxTokens = 8192;
-    } else if (genType === 'paragraph') {
-      genTypeText = 'one paragraph (3-5 sentences)';
-      maxTokens = 1024;
-    } else if (genType === 'sentence') {
-      genTypeText = '1-2 sentences';
-      maxTokens = 256;
-    }
 
     let imageInstruction = '';
     if (withImages) {
@@ -1786,28 +1714,23 @@ function sendChatMessage(userMessage, genType, withImages) {
     const systemPrompt = 'You are an expert technical documentation writer.\n\n' +
       'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
       'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
-      'TASK: Generate ' + genTypeText + ' based on the user request. ' +
+      'TASK: Generate full text (multiple paragraphs, subheadings, lists if needed) based on the user request. ' +
       'Strictly follow the document style. Respond ONLY with text.' +
       selectedTextInstruction + imageInstruction;
 
     const fullPrompt = systemPrompt + "\n\nREQUEST: " + userMessage;
-    const aiResponse = callAI(fullPrompt, maxTokens);
+    const aiResponse = callAI(fullPrompt, 8192);
     return { success: true, response: aiResponse };
   } catch (e) {
     return { success: false, error: e.toString() };
   }
 }
 
-function sendChatMessageWithImage(userMessage, imageBase64, imageName, genType, withImages) {
+function sendChatMessageWithImage(userMessage, imageBase64, imageName, withImages) {
   try {
     const currentSection = getCurrentSectionMarkdown();
     const docStyles = getDocumentStyleGuide();
     const selectedText = getSelectedText();
-
-    let genTypeText = '', maxTokens = 8192;
-    if (genType === 'full') { genTypeText = 'full text'; maxTokens = 8192; }
-    else if (genType === 'paragraph') { genTypeText = 'one paragraph'; maxTokens = 1024; }
-    else if (genType === 'sentence') { genTypeText = '1-2 sentences'; maxTokens = 256; }
 
     let imageInstruction = '';
     if (withImages) {
@@ -1824,10 +1747,10 @@ function sendChatMessageWithImage(userMessage, imageBase64, imageName, genType, 
       'DOCUMENT STYLE:\n```markdown\n' + docStyles + '\n```\n\n' +
       'CURRENT SECTION:\n```markdown\n' + currentSection + '\n```\n\n' +
       'TASK: User uploaded image "' + imageName + '" and requests: "' + userMessage + '"\n' +
-      'Generate ' + genTypeText + ' for the current section. Respond ONLY with text.' +
+      'Generate full text for the current section. Respond ONLY with text.' +
       selectedTextInstruction + imageInstruction;
 
-    const aiResponse = callAIWithImage(systemPrompt, imageBase64, maxTokens);
+    const aiResponse = callAIWithImage(systemPrompt, imageBase64, 8192);
     return { success: true, response: aiResponse };
   } catch (e) {
     return { success: false, error: e.toString() };
@@ -2047,7 +1970,7 @@ function getDocumentAsMarkdown() {
   return markdown || "Document is empty.";
 }
 
-/* ---------- INSERT & REPLACE ---------- */
+/* ---------- INSERT & REPLACE WITH STYLES ---------- */
 function insertMarkdownToDocument(markdown) {
   try {
     const doc = DocumentApp.getActiveDocument();
@@ -2069,6 +1992,48 @@ function insertMarkdownToDocument(markdown) {
     else return { success: false, message: result.error };
   } catch (e) {
     return { success: false, message: 'Insert error: ' + e.toString() };
+  }
+}
+
+/* Apply standard document styles (Times New Roman, 14, 1.5 spacing, etc) to a paragraph */
+function applyDocumentStyleToParagraph(para, heading) {
+  if (heading === DocumentApp.ParagraphHeading.NORMAL) {
+    para.setFontFamily('Times New Roman');
+    para.setFontSize(14);
+    para.setLineSpacing(1.5);
+    para.setSpacingAfter(0);
+    para.setSpacingBefore(0);
+    para.setIndentFirstLine(1.25 * 28.3465);
+  }
+  else if (heading === DocumentApp.ParagraphHeading.HEADING1) {
+    para.setFontFamily('Times New Roman');
+    para.setFontSize(14);
+    para.setBold(true);
+    para.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    para.setLineSpacing(1.5);
+    para.setSpacingBefore(12);
+    para.setSpacingAfter(12);
+    para.setIndentFirstLine(0);
+  }
+  else if (heading === DocumentApp.ParagraphHeading.HEADING2) {
+    para.setFontFamily('Times New Roman');
+    para.setFontSize(14);
+    para.setBold(true);
+    para.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
+    para.setLineSpacing(1.5);
+    para.setSpacingBefore(8);
+    para.setSpacingAfter(8);
+    para.setIndentFirstLine(0);
+  }
+  else if (heading === DocumentApp.ParagraphHeading.HEADING3) {
+    para.setFontFamily('Times New Roman');
+    para.setFontSize(14);
+    para.setBold(true);
+    para.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
+    para.setLineSpacing(1.5);
+    para.setSpacingBefore(6);
+    para.setSpacingAfter(6);
+    para.setIndentFirstLine(0);
   }
 }
 
@@ -2117,7 +2082,10 @@ function insertMarkdownAtCursor(doc, markdown) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
-      if (trimmed === '') { body.insertParagraph(currentIndex++, ''); continue; }
+      if (trimmed === '') {
+        body.insertParagraph(currentIndex++, '');
+        continue;
+      }
 
       const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
       if (imageMatch) {
@@ -2125,26 +2093,37 @@ function insertMarkdownAtCursor(doc, markdown) {
         continue;
       }
 
+      let p = null;
+      let heading = DocumentApp.ParagraphHeading.NORMAL;
+
       if (trimmed.startsWith('# ')) {
-        const p = body.insertParagraph(currentIndex++, trimmed.substring(2));
-        p.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        p = body.insertParagraph(currentIndex++, trimmed.substring(2));
+        heading = DocumentApp.ParagraphHeading.HEADING1;
+        p.setHeading(heading);
       } else if (trimmed.startsWith('## ')) {
-        const p = body.insertParagraph(currentIndex++, trimmed.substring(3));
-        p.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        p = body.insertParagraph(currentIndex++, trimmed.substring(3));
+        heading = DocumentApp.ParagraphHeading.HEADING2;
+        p.setHeading(heading);
       } else if (trimmed.startsWith('### ')) {
-        const p = body.insertParagraph(currentIndex++, trimmed.substring(4));
-        p.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+        p = body.insertParagraph(currentIndex++, trimmed.substring(4));
+        heading = DocumentApp.ParagraphHeading.HEADING3;
+        p.setHeading(heading);
       } else if (trimmed.match(/^\s*[-*+]\s/)) {
-        const p = body.insertListItem(currentIndex++, trimmed.replace(/^\s*[-*+]\s/, ''));
+        p = body.insertListItem(currentIndex++, trimmed.replace(/^\s*[-*+]\s/, ''));
         p.setGlyphType(DocumentApp.GlyphType.BULLET);
         applyInlineFormatting(p);
       } else if (trimmed.match(/^\s*\d+\.\s/)) {
-        const p = body.insertListItem(currentIndex++, trimmed.replace(/^\s*\d+\.\s/, ''));
+        p = body.insertListItem(currentIndex++, trimmed.replace(/^\s*\d+\.\s/, ''));
         p.setGlyphType(DocumentApp.GlyphType.NUMBER);
         applyInlineFormatting(p);
       } else {
-        const p = body.insertParagraph(currentIndex++, trimmed);
+        p = body.insertParagraph(currentIndex++, trimmed);
         applyInlineFormatting(p);
+      }
+
+      // Apply document-wide styles to the inserted paragraph
+      if (p) {
+        applyDocumentStyleToParagraph(p, heading);
       }
     }
     return { success: true };
